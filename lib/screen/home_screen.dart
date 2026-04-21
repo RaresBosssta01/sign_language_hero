@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+// Importăm celelalte ecrane pentru a putea naviga către ele
+import 'settings_screen.dart';
+import 'community_screen.dart';
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -10,20 +14,23 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // Cheia globală pentru a controla Scaffold-ul (necesară pentru a deschide Drawer-ul din cod)
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   
-  // "Telecomanda" hartii - ne permite sa o controlam din butoane
+  // Controller-ul hărții (telecomanda cu care o mișcăm/recentrăm)
   final MapController _mapController = MapController();
 
-  // Coordonata ta (Centrul Bucurestiului)
+  // Coordonata GPS "Acasă" (Centrul Bucureștiului)
   final LatLng _myLocation = const LatLng(44.4268, 26.1025);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       key: _scaffoldKey,
+      // Această opțiune permite hărții să se vadă și în spatele barei de sus (transparență)
       extendBodyBehindAppBar: true, 
       
+      // --- BARA DE SUS (AppBar) ---
       appBar: AppBar(
         backgroundColor: Colors.white.withValues(alpha: 0.85),
         elevation: 0,
@@ -51,6 +58,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
+          // Butonul de Meniu (Hamburger) în dreapta sus
           IconButton(
             icon: const Icon(Icons.menu_rounded, color: Colors.black87, size: 32),
             onPressed: () {
@@ -61,40 +69,47 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
 
+      // Definirea meniului lateral (cel care se deschide din dreapta)
       endDrawer: _buildDrawerMenu(),
 
-      // --- HARTA FULL SCREEN (Optimizată Anti-Lag) ---
+      // --- CORPUL PAGINII (Harta și Interfața Suprapusă) ---
       body: Stack(
         children: [
-          // 1. Positioned.fill FORȚEAZĂ harta să se lipească de toate marginile ecranului
+          // 1. Stratul de bază: Harta Reală
           Positioned.fill(
             child: FlutterMap(
               mapController: _mapController,
               options: MapOptions(
                 initialCenter: _myLocation,
                 initialZoom: 14.5,
-                minZoom: 3.0, // Zoom out global deblocat
-                maxZoom: 18.0, 
+                // LIMITĂRI DE SIGURANȚĂ:
+                minZoom: 5.0,   // Nu lăsăm zoom-out-ul să consume prea multe resurse
+                maxZoom: 19.0,  // Permitem zoom mare, dar cu optimizarea de mai jos
                 interactionOptions: const InteractionOptions(
                   flags: InteractiveFlag.all, 
                 ),
               ),
               children: [
                 TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  // Furnizor de hartă profesional (CartoDB Voyager)
+                  urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                  subdomains: const ['a', 'b', 'c', 'd'],
                   userAgentPackageName: 'com.signlanguagehero.app',
-                  // MAGIC TRICK: Pre-încarcă harta în fundal pentru glisări fine
-                  keepBuffer: 3, 
+                  
+                  // OPTIMIZARE ZOOM:
+                  maxNativeZoom: 18, // Peste acest nivel, doar mărim imaginea existentă (fără lag)
+                  keepBuffer: 3,     // Pre-încarcă zonele de pe margini
                 ),
+                // Stratul pentru voluntari și utilizator
                 MarkerLayer(
                   markers: [
-                    // Markerul tău
+                    // Indicatorul tău (Locația roșie)
                     Marker(
                       point: _myLocation,
                       width: 60, height: 60,
                       child: const Icon(Icons.person_pin_circle_rounded, color: Colors.red, size: 50),
                     ),
-                    // Voluntarii
+                    // Voluntarii "fantomă" (Mock data)
                     Marker(point: const LatLng(44.4300, 26.0950), width: 80, height: 80, child: _buildMapMarker("Andrei", "Fluent", true)),
                     Marker(point: const LatLng(44.4220, 26.1100), width: 80, height: 80, child: _buildMapMarker("Maria", "CODA", true)),
                     Marker(point: const LatLng(44.4350, 26.1050), width: 80, height: 80, child: _buildMapMarker("Ion", "Mediu", false)),
@@ -104,7 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // --- BUTONUL "GĂSEȘTE-MĂ" ---
+          // 2. Butonul Plutitor "Recentrare"
           Positioned(
             bottom: 220, 
             right: 20,
@@ -118,7 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // --- PANOUL SOS (Fixat Jos) ---
+          // 3. Panoul SOS (Fixat în partea de jos)
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
@@ -151,10 +166,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 20),
                   
+                  // Gestul de Apăsare Lungă pentru SOS
                   GestureDetector(
                     onLongPress: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("🚨 Alerteză trimisă către voluntarii din zonă!"), backgroundColor: Colors.redAccent),
+                        const SnackBar(
+                          content: Text("🚨 Cerere de urgență trimisă voluntarilor!"), 
+                          backgroundColor: Colors.redAccent
+                        ),
                       );
                     },
                     child: Container(
@@ -190,12 +209,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- Meniul Lateral ---
+  // --- COMPONENTĂ: Meniul Lateral (Sertarul) ---
   Widget _buildDrawerMenu() {
     return Drawer(
       backgroundColor: Colors.white,
       child: Column(
         children: [
+          // Antetul Meniului (Profil + Gamificare)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.only(top: 60, bottom: 20, left: 20, right: 20),
@@ -225,11 +245,14 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           
+          // Lista de pagini (Navigația)
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(vertical: 10),
               children: [
                 _buildMenuItem(Icons.map_rounded, "Harta Urgențelor", "Vezi voluntarii activi"),
+                
+                // Pagina de Comunitate
                 ListTile(
                   leading: const Icon(Icons.forum_rounded, color: Color(0xFF1E88E5), size: 28),
                   title: const Text("Comunitate & Feed", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -239,23 +262,39 @@ class _HomeScreenState extends State<HomeScreen> {
                     decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(10)),
                     child: const Text("3 Noi", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                   ),
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.pop(context); 
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const CommunityScreen()));
+                  },
                 ),
+
                 _buildMenuItem(Icons.calendar_month_rounded, "Programări", "Rezervă un interpret pt. mâine"),
                 _buildMenuItem(Icons.menu_book_rounded, "Dicționar LSR", "Învață semne noi zilnic"),
+                
                 const Divider(height: 30),
-                _buildMenuItem(Icons.emoji_events_rounded, "Clasament Eroi", "Top voluntari pe oraș", color: Colors.amber.shade700),
-                _buildMenuItem(Icons.settings_rounded, "Setări", "Cont, notificări, intimitate", color: Colors.grey.shade700),
+
+                // Pagina de Setări
+                ListTile(
+                  leading: Icon(Icons.settings_rounded, color: Colors.grey.shade700, size: 28),
+                  title: const Text("Setări", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  subtitle: const Text("Cont, notificări, intimitate"),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                  onTap: () {
+                    Navigator.pop(context); 
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
+                  },
+                ),
               ],
             ),
           ),
           
+          // Butonul de Delogare
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: OutlinedButton.icon(
               onPressed: () {
                 Navigator.pop(context);
-                Navigator.pop(context); // Revine la Login
+                Navigator.pop(context); // Ne trimite înapoi la Login
               },
               icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
               label: const Text("Deconectare", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
@@ -270,6 +309,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
+  // --- MICI AJUTOARE PENTRU DESIGN (Helpers) ---
 
   Widget _buildMenuItem(IconData icon, String title, String subtitle, {Color color = const Color(0xFF1E88E5)}) {
     return ListTile(
