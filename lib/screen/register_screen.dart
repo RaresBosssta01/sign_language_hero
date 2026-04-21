@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Importul magic
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -10,11 +11,23 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   
+  // Am adaugat Controllere pentru a "citi" ce scrie utilizatorul
+  final TextEditingController _numeController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  
   String tipCont = 'Utilizator'; 
   String? nivelLSR = 'Incepator'; 
   final List<String> optiuniLSR = ['Incepator', 'Mediu', 'Fluent', 'CODA', 'Certificat'];
-  
   bool _isPasswordVisible = false;
+
+  @override
+  void dispose() {
+    _numeController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +58,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         child: SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10),
-            child: Form( // AM ADĂUGAT FORMULARUL
+            child: Form( 
               key: _formKey,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -77,7 +90,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(30),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5))],
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, 5))],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -103,20 +116,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         const Text("Datele de identificare", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black54)),
                         const SizedBox(height: 15),
                         
-                        // CAMP NUME 
                         TextFormField(
+                          controller: _numeController, // Atasat controller
                           decoration: inputStyle("Numele tău complet", Icons.person_outline),
                           validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Nu poți fi un erou anonim!';
-                            }
+                            if (value == null || value.trim().isEmpty) return 'Nu poți fi un erou anonim!';
                             return null;
                           },
                         ),
                         const SizedBox(height: 15),
                         
-                        // CAMP EMAIL
                         TextFormField(
+                          controller: _emailController, // Atasat controller
                           keyboardType: TextInputType.emailAddress,
                           decoration: inputStyle("Adresa de email validă", Icons.alternate_email),
                           validator: (value) {
@@ -129,8 +140,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         const SizedBox(height: 15),
                         
-                        // CAMP PAROLA COMPLEXA
                         TextFormField(
+                          controller: _passwordController, // Atasat controller
                           obscureText: !_isPasswordVisible,
                           decoration: InputDecoration(
                             hintText: "O parolă puternică",
@@ -147,7 +158,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           validator: (value) {
                             if (value == null || value.isEmpty) return 'Parola este obligatorie.';
                             if (value.length < 8) return 'Minim 8 caractere.';
-                            // Verifica daca exista cel putin o litera mare si o cifra
                             if (!RegExp(r'(?=.*[A-Z])').hasMatch(value)) return 'Trebuie să conțină o majusculă.';
                             if (!RegExp(r'(?=.*[0-9])').hasMatch(value)) return 'Trebuie să conțină o cifră.';
                             return null;
@@ -159,12 +169,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           width: double.infinity,
                           height: 55,
                           child: ElevatedButton(
-                            onPressed: () {
-                              // VERIFICAREA FINALA A INTREGULUI FORMULAR
+                            // Am adaugat "async" aici pentru ca scrierea in memorie dureaza cateva milisecunde
+                            onPressed: () async { 
                               if (_formKey.currentState!.validate()) {
-                                print("Formular PERFECT validat! Creare cont: $tipCont");
-                              } else {
-                                print("Sunt erori in formular!");
+                                // SALVARE LOCALA IN TELEFON
+                                SharedPreferences prefs = await SharedPreferences.getInstance();
+                                await prefs.setString('email_salvat', _emailController.text);
+                                await prefs.setString('parola_salvata', _passwordController.text);
+                                await prefs.setString('nume_salvat', _numeController.text);
+
+                                // Aratam un mesaj frumos
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text("Cont creat cu succes! Te poți loga acum."), backgroundColor: Colors.green),
+                                  );
+                                  // Trimitem utilizatorul inapoi la Login
+                                  Navigator.pop(context);
+                                }
                               }
                             },
                             style: ElevatedButton.styleFrom(
@@ -209,7 +230,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(25),
         border: Border.all(color: isSelected ? primaryColor : Colors.white, width: 3),
-        boxShadow: [BoxShadow(color: isSelected ? primaryColor.withOpacity(0.2) : Colors.black.withOpacity(0.05), blurRadius: isSelected ? 15 : 10, offset: const Offset(0, 5))],
+        boxShadow: [BoxShadow(color: isSelected ? primaryColor.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.05), blurRadius: isSelected ? 15 : 10, offset: const Offset(0, 5))],
       ),
       child: Column(
         children: [
