@@ -1,11 +1,60 @@
+import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'dictionary_screen.dart';
 
 // Importăm celelalte ecrane pentru a putea naviga către ele
 import 'settings_screen.dart';
 import 'community_screen.dart';
 
+// --------------------------------------------------------
+// 1. CLASA VOLUNTAR (Logica de mișcare)
+// --------------------------------------------------------
+class Voluntar {
+  final String nume;
+  final String specializare;
+  final double rating;
+  
+  LatLng pozitie;
+  LatLng? destinatie; 
+  bool inMiscare;
+
+  Voluntar({
+    required this.nume,
+    required this.specializare,
+    required this.rating,
+    required this.pozitie,
+    this.destinatie,
+    this.inMiscare = false,
+  });
+
+  void faUnPas() {
+    if (!inMiscare || destinatie == null) return;
+
+    double dLat = destinatie!.latitude - pozitie.latitude;
+    double dLng = destinatie!.longitude - pozitie.longitude;
+    double distanta = sqrt(dLat * dLat + dLng * dLng);
+    
+    // Viteza de mers pe jos
+    double lungimePas = 0.000015;
+
+    if (distanta < lungimePas) {
+      pozitie = destinatie!;
+      inMiscare = false;
+    } else {
+      pozitie = LatLng(
+        pozitie.latitude + (dLat / distanta) * lungimePas,
+        pozitie.longitude + (dLng / distanta) * lungimePas,
+      );
+    }
+  }
+}
+
+// --------------------------------------------------------
+// 2. ECRANUL PRINCIPAL
+// --------------------------------------------------------
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -14,20 +63,162 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // Cheia globală pentru a controla Scaffold-ul (necesară pentru a deschide Drawer-ul din cod)
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  
-  // Controller-ul hărții (telecomanda cu care o mișcăm/recentrăm)
   final MapController _mapController = MapController();
-
-  // Coordonata GPS "Acasă" (Centrul Bucureștiului)
   final LatLng _myLocation = const LatLng(44.4268, 26.1025);
+
+  // Motorul de animație
+  late List<Voluntar> voluntari;
+  Timer? _motorTimp;
+
+  @override
+  void initState() {
+    super.initState();
+    _genereazaVoluntari();
+    _pornesteMotorulTimpului();
+  }
+
+  void _genereazaVoluntari() {
+    voluntari = [
+      Voluntar(
+        nume: "Andrei",
+        specializare: "Interpret Fluent",
+        rating: 4.9,
+        pozitie: const LatLng(44.4300, 26.0950),
+        destinatie: const LatLng(44.4270, 26.1010), // Se îndreaptă spre tine
+        inMiscare: true,
+      ),
+      Voluntar(
+        nume: "Maria",
+        specializare: "CODA",
+        rating: 5.0,
+        pozitie: const LatLng(44.4220, 26.1100),
+      ),
+      Voluntar(
+        nume: "Ion",
+        specializare: "Nivel Mediu",
+        rating: 4.5,
+        pozitie: const LatLng(44.4350, 26.1050),
+        destinatie: const LatLng(44.4380, 26.0980),
+        inMiscare: true,
+      ),
+    ];
+  }
+
+  void _pornesteMotorulTimpului() {
+    _motorTimp = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        for (var v in voluntari) {
+          v.faUnPas();
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _motorTimp?.cancel(); // Oprim timer-ul ca să nu consume baterie
+    super.dispose();
+  }
+
+  // Pop-up-ul cu Profilul Voluntarului
+  void _arataProfil(Voluntar v) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        height: 280,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 30,
+                  backgroundColor: v.inMiscare ? Colors.orange.shade100 : Colors.green.shade100,
+                  child: Icon(Icons.person, size: 35, color: v.inMiscare ? Colors.orange : Colors.green),
+                ),
+                const SizedBox(width: 15),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(v.nume, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    Text(v.specializare, style: TextStyle(color: Colors.grey.shade700, fontSize: 14)),
+                  ],
+                )
+              ],
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                const Icon(Icons.star, color: Colors.amber, size: 28),
+                const SizedBox(width: 5),
+                Text("${v.rating} Scor Încredere", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: v.inMiscare ? Colors.orange.shade50 : Colors.green.shade50, 
+                    borderRadius: BorderRadius.circular(10)
+                  ),
+                  child: Text(
+                    v.inMiscare ? "În Mișcare 🚶" : "Disponibil ✅", 
+                    style: TextStyle(color: v.inMiscare ? Colors.orange : Colors.green, fontWeight: FontWeight.bold)
+                  ),
+                )
+              ],
+            ),
+            const Spacer(),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E88E5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                icon: const Icon(Icons.video_call, color: Colors.white),
+                label: const Text("CERE AJUTOR VIDEO", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                onPressed: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Apel trimis către ${v.nume}...")),
+                  );
+                },
+              ),
+            )
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Combinăm markerul tău cu lista de voluntari
+    List<Marker> mapMarkers = [
+      Marker(
+        point: _myLocation,
+        width: 60, height: 60,
+        child: const Icon(Icons.person_pin_circle_rounded, color: Colors.red, size: 50),
+      ),
+    ];
+
+    // Adăugăm voluntarii animati în listă
+    mapMarkers.addAll(voluntari.map((v) {
+      return Marker(
+        point: v.pozitie,
+        width: 80, height: 80,
+        child: GestureDetector(
+          onTap: () => _arataProfil(v),
+          child: _buildDynamicMarker(v),
+        ),
+      );
+    }));
+
     return Scaffold(
       key: _scaffoldKey,
-      // Această opțiune permite hărții să se vadă și în spatele barei de sus (transparență)
       extendBodyBehindAppBar: true, 
       
       // --- BARA DE SUS (AppBar) ---
@@ -58,82 +249,55 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
-          // Butonul de Meniu (Hamburger) în dreapta sus
           IconButton(
             icon: const Icon(Icons.menu_rounded, color: Colors.black87, size: 32),
-            onPressed: () {
-              _scaffoldKey.currentState!.openEndDrawer();
-            },
+            onPressed: () => _scaffoldKey.currentState!.openEndDrawer(),
           ),
           const SizedBox(width: 10),
         ],
       ),
 
-      // Definirea meniului lateral (cel care se deschide din dreapta)
       endDrawer: _buildDrawerMenu(),
 
-      // --- CORPUL PAGINII (Harta și Interfața Suprapusă) ---
+      // --- CORPUL PAGINII ---
       body: Stack(
         children: [
-          // 1. Stratul de bază: Harta Reală
+          // 1. Harta
           Positioned.fill(
             child: FlutterMap(
               mapController: _mapController,
               options: MapOptions(
                 initialCenter: _myLocation,
                 initialZoom: 14.5,
-                // LIMITĂRI DE SIGURANȚĂ:
-                minZoom: 5.0,   // Nu lăsăm zoom-out-ul să consume prea multe resurse
-                maxZoom: 19.0,  // Permitem zoom mare, dar cu optimizarea de mai jos
-                interactionOptions: const InteractionOptions(
-                  flags: InteractiveFlag.all, 
-                ),
+                minZoom: 5.0,
+                maxZoom: 19.0,
+                interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
               ),
               children: [
                 TileLayer(
-                  // Furnizor de hartă profesional (CartoDB Voyager)
                   urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
                   subdomains: const ['a', 'b', 'c', 'd'],
                   userAgentPackageName: 'com.signlanguagehero.app',
-                  
-                  // OPTIMIZARE ZOOM:
-                  maxNativeZoom: 18, // Peste acest nivel, doar mărim imaginea existentă (fără lag)
-                  keepBuffer: 3,     // Pre-încarcă zonele de pe margini
+                  maxNativeZoom: 18,
+                  keepBuffer: 3,
                 ),
-                // Stratul pentru voluntari și utilizator
-                MarkerLayer(
-                  markers: [
-                    // Indicatorul tău (Locația roșie)
-                    Marker(
-                      point: _myLocation,
-                      width: 60, height: 60,
-                      child: const Icon(Icons.person_pin_circle_rounded, color: Colors.red, size: 50),
-                    ),
-                    // Voluntarii "fantomă" (Mock data)
-                    Marker(point: const LatLng(44.4300, 26.0950), width: 80, height: 80, child: _buildMapMarker("Andrei", "Fluent", true)),
-                    Marker(point: const LatLng(44.4220, 26.1100), width: 80, height: 80, child: _buildMapMarker("Maria", "CODA", true)),
-                    Marker(point: const LatLng(44.4350, 26.1050), width: 80, height: 80, child: _buildMapMarker("Ion", "Mediu", false)),
-                  ],
-                ),
+                MarkerLayer(markers: mapMarkers),
               ],
             ),
           ),
 
-          // 2. Butonul Plutitor "Recentrare"
+          // 2. Butonul Recentrare
           Positioned(
-            bottom: 220, 
-            right: 20,
+            bottom: 220, right: 20,
             child: FloatingActionButton(
               backgroundColor: Colors.white,
               elevation: 4,
-              onPressed: () {
-                _mapController.move(_myLocation, 14.5);
-              },
+              onPressed: () => _mapController.move(_myLocation, 14.5),
               child: const Icon(Icons.my_location_rounded, color: Color(0xFF1E88E5)),
             ),
           ),
 
-          // 3. Panoul SOS (Fixat în partea de jos)
+          // 3. Panoul SOS 
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
@@ -165,15 +329,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  
-                  // Gestul de Apăsare Lungă pentru SOS
                   GestureDetector(
                     onLongPress: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text("🚨 Cerere de urgență trimisă voluntarilor!"), 
-                          backgroundColor: Colors.redAccent
-                        ),
+                        const SnackBar(content: Text("🚨 Cerere de urgență trimisă voluntarilor!"), backgroundColor: Colors.redAccent),
                       );
                     },
                     child: Container(
@@ -209,13 +368,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- COMPONENTĂ: Meniul Lateral (Sertarul) ---
+  // --- MENIUL LATERAL ---
   Widget _buildDrawerMenu() {
     return Drawer(
       backgroundColor: Colors.white,
       child: Column(
         children: [
-          // Antetul Meniului (Profil + Gamificare)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.only(top: 60, bottom: 20, left: 20, right: 20),
@@ -244,15 +402,11 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-          
-          // Lista de pagini (Navigația)
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(vertical: 10),
               children: [
                 _buildMenuItem(Icons.map_rounded, "Harta Urgențelor", "Vezi voluntarii activi"),
-                
-                // Pagina de Comunitate
                 ListTile(
                   leading: const Icon(Icons.forum_rounded, color: Color(0xFF1E88E5), size: 28),
                   title: const Text("Comunitate & Feed", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -267,13 +421,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const CommunityScreen()));
                   },
                 ),
-
                 _buildMenuItem(Icons.calendar_month_rounded, "Programări", "Rezervă un interpret pt. mâine"),
-                _buildMenuItem(Icons.menu_book_rounded, "Dicționar LSR", "Învață semne noi zilnic"),
-                
+                ListTile(
+                  leading: const Icon(Icons.menu_book_rounded, color: Color(0xFF1E88E5), size: 28),
+                  title: const Text("Dicționar LSR", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  subtitle: const Text("Învață semne noi zilnic"),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                  onTap: () {
+                    Navigator.pop(context); // Închide meniul lateral
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const DictionaryScreen()));
+                  },
+                ),
                 const Divider(height: 30),
-
-                // Pagina de Setări
                 ListTile(
                   leading: Icon(Icons.settings_rounded, color: Colors.grey.shade700, size: 28),
                   title: const Text("Setări", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -287,14 +446,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-          
-          // Butonul de Delogare
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: OutlinedButton.icon(
               onPressed: () {
                 Navigator.pop(context);
-                Navigator.pop(context); // Ne trimite înapoi la Login
+                Navigator.pop(context); 
               },
               icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
               label: const Text("Deconectare", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
@@ -310,11 +467,10 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- MICI AJUTOARE PENTRU DESIGN (Helpers) ---
-
-  Widget _buildMenuItem(IconData icon, String title, String subtitle, {Color color = const Color(0xFF1E88E5)}) {
+  // --- HELPERS (Design personalizat pentru Markere) ---
+  Widget _buildMenuItem(IconData icon, String title, String subtitle) {
     return ListTile(
-      leading: Icon(icon, color: color, size: 28),
+      leading: Icon(icon, color: const Color(0xFF1E88E5), size: 28),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
       subtitle: Text(subtitle, style: const TextStyle(fontSize: 13)),
       trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
@@ -322,7 +478,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildMapMarker(String name, String level, bool isOnline) {
+  // Metoda care construiește design-ul markerului în funcție de starea voluntarului (se mișcă sau nu)
+  Widget _buildDynamicMarker(Voluntar v) {
+    Color ringColor = v.inMiscare ? Colors.orange : Colors.green;
+    Color bgColor = v.inMiscare ? Colors.orange.shade50 : Colors.green.shade50;
+    
     return Column(
       children: [
         Container(
@@ -331,19 +491,19 @@ class _HomeScreenState extends State<HomeScreen> {
             color: Colors.white,
             shape: BoxShape.circle,
             boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 10, offset: const Offset(0, 5))],
-            border: Border.all(color: isOnline ? Colors.green : Colors.transparent, width: 3),
+            border: Border.all(color: ringColor, width: 3),
           ),
           child: CircleAvatar(
             radius: 18, 
-            backgroundColor: Colors.blue.shade50,
-            child: Text(name[0], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1E88E5))),
+            backgroundColor: bgColor,
+            child: Text(v.nume[0], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: ringColor)),
           ),
         ),
         const SizedBox(height: 5),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(10)),
-          child: Text("$name • $level", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black87)),
+          child: Text("${v.nume} • ${v.rating}", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black87)),
         )
       ],
     );
