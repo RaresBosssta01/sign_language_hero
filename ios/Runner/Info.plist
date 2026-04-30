@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Aplicația are nevoie de locația ta pentru a-ți arăta urgențele din apropiere.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Aplicația are nevoie de locația ta pentru a te alerta în caz de urgență chiar și când e în fundal.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

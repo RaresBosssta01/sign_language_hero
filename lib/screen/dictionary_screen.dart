@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-// Importăm ecranul cu camera (Oglinda), presupunând că e în același folder (screens)
+// Importăm ecranul cu camera (Oglinda)
 import 'mirror_screen.dart'; 
 
 // --------------------------------------------------------
-// ECRANUL DICȚIONAR (Stil TikTok / Reels)
+// ECRANUL DICȚIONAR (Stil TikTok + Mod Căutare)
 // --------------------------------------------------------
 class DictionaryScreen extends StatefulWidget {
   const DictionaryScreen({super.key});
@@ -18,7 +18,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     {
       'titlu': 'Urgență / Ajutor',
       'categorie': 'Medical',
-      'gifUrl': '', // Lăsăm gol deocamdată, am făcut un design frumos de înlocuire
+      'gifUrl': '', 
       'aiTip': 'Loviturile scurte pe piept cu pumnul înseamnă urgență. Păstrează contactul vizual intens pentru a transmite gravitatea situației.',
       'dificultate': 'Ușor',
     },
@@ -33,7 +33,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
       'titlu': 'Unde te doare?',
       'categorie': 'Medical',
       'gifUrl': '', 
-      'aiTip': 'Folosește degetul arătător pentru a indica zona, combinat cu sprâncenele ușor coborâte, care în LSR marchează o întrebare (cine/ce/unde).',
+      'aiTip': 'Folosește degetul arătător pentru a indica zona, combinat cu sprâncenele ușor coborâte, care în LSR marchează o întrebare.',
       'dificultate': 'Greu',
     },
     {
@@ -42,45 +42,219 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
       'gifUrl': '', 
       'aiTip': 'Semnul pentru "mașină" combinat cu semnul crucii. Fă mișcările hotărât pentru a transmite siguranță și calm.',
       'dificultate': 'Mediu',
+    },
+    {
+      'titlu': 'Poliție',
+      'categorie': 'Urgență',
+      'gifUrl': '', 
+      'aiTip': 'Formează litera "C" cu mâna (semnificând insigna/cascheta) și plasează-o pe piept în partea stângă.',
+      'dificultate': 'Ușor',
+    },
+    {
+      'titlu': 'Mulțumesc',
+      'categorie': 'Politețe',
+      'gifUrl': '', 
+      'aiTip': 'Du degetele de la o mână spre buze, apoi mișcă mâna înainte, spre persoana căreia îi mulțumești.',
+      'dificultate': 'Ușor',
     }
   ];
+
+  // Controlerul pentru scroll-ul vertical (Reels)
+  late PageController _pageController;
+  
+  // Starea pentru căutare
+  bool _isSearchMode = false;
+  List<Map<String, dynamic>> _semneFiltrate = [];
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+    _semneFiltrate = List.from(_semne); // Inițial, afișăm toate semnele
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  // Funcție de filtrare live
+  void _filtreazaSemne(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        _semneFiltrate = List.from(_semne);
+      } else {
+        _semneFiltrate = _semne.where((semn) => 
+          semn['titlu'].toString().toLowerCase().contains(query.toLowerCase()) ||
+          semn['categorie'].toString().toLowerCase().contains(query.toLowerCase())
+        ).toList();
+      }
+    });
+  }
+
+  // Funcție care te duce la videoclipul selectat din căutare
+  void _mergiLaSemn(Map<String, dynamic> semnSelectat) {
+    int index = _semne.indexOf(semnSelectat);
+    setState(() {
+      _isSearchMode = false;
+      _searchController.clear();
+      _semneFiltrate = List.from(_semne);
+    });
+    // Sărim direct la videoclipul corect în Feed
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_pageController.hasClients) {
+        _pageController.jumpToPage(index);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black, // Fundal negru specific playerelor video
+      backgroundColor: Colors.black, 
       
-      // Bara de sus (Transparentă ca să se vadă "video-ul" pe sub ea)
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: _isSearchMode ? const Color(0xFF111827) : Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            if (_isSearchMode) {
+              setState(() => _isSearchMode = false);
+            } else {
+              Navigator.pop(context);
+            }
+          },
         ),
-        title: const Text("Învață LSR", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(
+          _isSearchMode ? "Caută Semn" : "Învață LSR", 
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+        ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: Icon(_isSearchMode ? Icons.close : Icons.search, color: Colors.white),
+            onPressed: () {
+              setState(() {
+                _isSearchMode = !_isSearchMode;
+                if (!_isSearchMode) {
+                  _searchController.clear();
+                  _semneFiltrate = List.from(_semne);
+                }
+              });
+            },
+          )
+        ],
       ),
-      extendBodyBehindAppBar: true, 
+      extendBodyBehindAppBar: !_isSearchMode, 
       
-      // Motorul care face "Swipe Up" (Derulare verticală pe tot ecranul)
-      body: PageView.builder(
-        scrollDirection: Axis.vertical,
-        itemCount: _semne.length,
-        itemBuilder: (context, index) {
-          return _buildVideoCard(_semne[index]);
-        },
-      ),
+      body: _isSearchMode ? _buildSearchGrid() : _buildFeedMode(),
     );
   }
 
-  // --- COMPONENTA VIZUALĂ PENTRU FIECARE SEMN ---
+  // --- MODUL 1: FEED TIKTOK / REELS ---
+  Widget _buildFeedMode() {
+    return PageView.builder(
+      controller: _pageController,
+      scrollDirection: Axis.vertical,
+      itemCount: _semne.length,
+      itemBuilder: (context, index) {
+        return _buildVideoCard(_semne[index]);
+      },
+    );
+  }
+
+  // --- MODUL 2: CĂUTARE (Când ai nevoie rapid de un cuvânt) ---
+  Widget _buildSearchGrid() {
+    return Column(
+      children: [
+        // Bara de căutare text
+        Padding(
+          padding: const EdgeInsets.all(15.0),
+          child: TextField(
+            controller: _searchController,
+            onChanged: _filtreazaSemne,
+            style: const TextStyle(color: Colors.white),
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: "Ex: Urgență, Ambulanță, Apă...",
+              hintStyle: const TextStyle(color: Colors.white54),
+              prefixIcon: const Icon(Icons.search, color: Colors.tealAccent),
+              filled: true,
+              fillColor: Colors.white.withValues(alpha: 0.1),
+              contentPadding: const EdgeInsets.symmetric(vertical: 15),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+            ),
+          ),
+        ),
+        
+        // Grila de rezultate
+        Expanded(
+          child: _semneFiltrate.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.search_off_rounded, size: 60, color: Colors.white.withValues(alpha: 0.2)),
+                    const SizedBox(height: 15),
+                    const Text("Nu am găsit niciun semn.", style: TextStyle(color: Colors.white54, fontSize: 16)),
+                  ],
+                ),
+              )
+            : ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 15),
+                itemCount: _semneFiltrate.length,
+                itemBuilder: (context, index) {
+                  final s = _semneFiltrate[index];
+                  return GestureDetector(
+                    onTap: () => _mergiLaSemn(s),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(15),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(color: Colors.teal.shade900, borderRadius: BorderRadius.circular(10)),
+                            child: const Icon(Icons.play_circle_fill_rounded, color: Colors.tealAccent),
+                          ),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(s['titlu'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                                const SizedBox(height: 4),
+                                Text("${s['categorie']} • Nivel: ${s['dificultate']}", style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right, color: Colors.white54),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+        ),
+      ],
+    );
+  }
+
+  // --- COMPONENTA VIZUALĂ PENTRU FIECARE SEMN (Tiktok Card) ---
   Widget _buildVideoCard(Map<String, dynamic> semn) {
     return Stack(
       fit: StackFit.expand,
       children: [
         // 1. ZONA VIDEO (Fundalul ecranului)
-        // La hackathon, dacă nu aveți un GIF real pus la 'gifUrl', va apărea acest ecran superb de "Placeholder"
         Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -96,7 +270,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
+                    color: Colors.white.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.play_arrow_rounded, size: 60, color: Colors.white70),
@@ -112,13 +286,13 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
           ),
         ),
 
-        // Gradient negru în partea de jos pentru a putea citi textul peste "video"
+        // Gradient negru în partea de jos pentru a putea citi textul
         Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.bottomCenter,
               end: Alignment.center,
-              colors: [Colors.black.withOpacity(0.95), Colors.transparent],
+              colors: [Colors.black.withValues(alpha: 0.95), Colors.transparent],
             ),
           ),
         ),
@@ -157,9 +331,9 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                 Container(
                   padding: const EdgeInsets.all(15),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
+                    color: Colors.white.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: Colors.tealAccent.withOpacity(0.3), width: 1),
+                    border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.3), width: 1),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -185,9 +359,8 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                 SizedBox(
                   width: double.infinity,
                   height: 55,
-                  child: ElevatedButton.icon(
+                  child: ElevatedButton(
                     onPressed: () {
-                      // Legătura magică către camera frontală!
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -198,16 +371,28 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                         ),
                       );
                     },
-                    icon: const Icon(Icons.camera_front_rounded, color: Colors.teal),
-                    label: const Text("ANTRENEAZĂ-TE ÎN OGLINDĂ", style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 16)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
                       elevation: 5,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                     ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.camera_front_rounded, color: Colors.teal),
+                        const SizedBox(width: 10),
+                        const Text("ANTRENEAZĂ-TE ÎN OGLINDĂ", style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 15)),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(color: Colors.amber.shade100, borderRadius: BorderRadius.circular(10)),
+                          child: Text("+10 XP", style: TextStyle(color: Colors.amber.shade900, fontSize: 10, fontWeight: FontWeight.bold)),
+                        )
+                      ],
+                    )
                   ),
                 ),
-                const SizedBox(height: 10), // Spațiu la bază
+                const SizedBox(height: 10), 
               ],
             ),
           ),

@@ -1,7 +1,17 @@
 import 'package:flutter/material.dart';
-import 'screen/login_screen.dart'; // Aici am pus "screen" în loc de "screens"
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'screen/login_screen.dart';
 
-void main() {
+void main() async {
+  // 1. Pornim motorul Flutter
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // 2. Facem conexiunea cu baza de date
+  await Supabase.initialize(
+    url: 'https://nmjksiotpkvwzlhemuzr.supabase.co',
+    anonKey: 'sb_publishable_RwktDbQbp0RKUTEyAA0AQQ_b-eZNrkD',
+  );
+
   runApp(const SignLanguageApp());
 }
 
@@ -14,9 +24,10 @@ class SignLanguageApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Sign Language Hero',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF007BFF)),
+        useMaterial3: true,
       ),
-      home: const LoginScreen(), // Aici îi spunem să pornească direct cu Login
+      home: const LoginScreen(),
     );
   }
 }
