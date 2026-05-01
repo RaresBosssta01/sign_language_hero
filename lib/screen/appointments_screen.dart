@@ -20,7 +20,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     myId = _supabase.auth.currentUser!.id;
   }
 
-  // --- FUNCȚIE: CAUTĂ NUMELE REAL ---
   Future<String> _obtineNumePartener(String id) async {
     try {
       final data = await _supabase
@@ -35,7 +34,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     }
   }
 
-  // --- ACȚIUNE: ACCEPTĂ CEREREA ---
   Future<void> _acceptaCererea(String cerereId) async {
     try {
       await _supabase.from('programari').update({
@@ -52,16 +50,163 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     }
   }
 
-  // --- LOGICĂ SMS, EMAIL & HARTĂ ---
-  Future<void> _deschideAplicatie(String tip) async {
-    const String numarTelefon = "0712345678";
-    const String adresaEmail = "contact@signlanguagehero.ro";
-
-    final Uri uri = tip == 'sms' 
-        ? Uri(scheme: 'sms', path: numarTelefon)
-        : Uri(scheme: 'mailto', path: adresaEmail, query: 'subject=Referitor la programarea Sign Language Hero');
-
+  Future<void> _finalizeazaProgramarea(String programareId, String voluntarId) async {
     try {
+      await _supabase.from('programari').update({
+        'status': 'finalizata'
+      }).eq('id', programareId);
+
+      final profilData = await _supabase.from('profiluri').select('xp').eq('id', voluntarId).maybeSingle();
+      int xpCurent = 0;
+      if (profilData != null && profilData['xp'] != null) {
+        xpCurent = int.tryParse(profilData['xp'].toString()) ?? 0;
+      }
+      
+      int xpNou = xpCurent + 50;
+      await _supabase.from('profiluri').update({
+        'xp': xpNou
+      }).eq('id', voluntarId);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("🎉 Întâlnire finalizată cu succes! Ai primit +50 XP."), 
+          backgroundColor: Color(0xFF10B981)
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Eroare la finalizare: $e"), backgroundColor: Colors.redAccent)
+      );
+    }
+  }
+
+  Future<void> _acordaRating(String programareId, String voluntarId, int stele) async {
+    try {
+      final voluntarData = await _supabase.from('profiluri').select('rating, numar_ratinguri').eq('id', voluntarId).single();
+      
+      double ratingCurent = double.tryParse(voluntarData['rating']?.toString() ?? '5.0') ?? 5.0;
+      int numarCurent = voluntarData['numar_ratinguri'] ?? 0;
+
+      int numarNou = numarCurent + 1;
+      double ratingNou = ((ratingCurent * numarCurent) + stele) / numarNou;
+      
+      ratingNou = double.parse(ratingNou.toStringAsFixed(1));
+
+      await _supabase.from('profiluri').update({
+        'rating': ratingNou,
+        'numar_ratinguri': numarNou
+      }).eq('id', voluntarId);
+
+      await _supabase.from('programari').update({
+        'status': 'evaluata' 
+      }).eq('id', programareId);
+
+      if (!mounted) return;
+      Navigator.pop(context); 
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Mulțumim pentru feedback! Rating salvat cu succes."), backgroundColor: Colors.green)
+      );
+
+    } catch (e) {
+      debugPrint("Eroare la acordarea ratingului: $e");
+    }
+  }
+
+  void _arataDialogRating(Map<String, dynamic> appointment) {
+    int steleSelectate = 5; 
+
+    showDialog(
+      context: context,
+      barrierDismissible: false, 
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            backgroundColor: Colors.white,
+            contentPadding: const EdgeInsets.all(25),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(color: Colors.amber.shade50, shape: BoxShape.circle),
+                  child: const Icon(Icons.star_rounded, color: Colors.amber, size: 40),
+                ),
+                const SizedBox(height: 20),
+                const Text("Cum a fost experiența?", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                const SizedBox(height: 10),
+                const Text("Oferă o notă voluntarului tău pentru a menține calitatea comunității.", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 13)),
+                const SizedBox(height: 25),
+                
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (index) {
+                    return IconButton(
+                      onPressed: () {
+                        setModalState(() => steleSelectate = index + 1);
+                      },
+                      icon: Icon(
+                        index < steleSelectate ? Icons.star_rounded : Icons.star_border_rounded,
+                        color: Colors.amber,
+                        size: 35,
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 25),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 45,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF3B82F6),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0
+                    ),
+                    onPressed: () => _acordaRating(appointment['id'].toString(), appointment['voluntar_id'].toString(), steleSelectate),
+                    child: const Text("TRIMITE RATING", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    _supabase.from('programari').update({'status': 'evaluata'}).eq('id', appointment['id']);
+                    Navigator.pop(context);
+                  },
+                  child: const Text("Omite", style: TextStyle(color: Colors.grey)),
+                )
+              ],
+            ),
+          );
+        }
+      )
+    );
+  }
+
+  Future<void> _deschideAplicatie(String tip, String partenerId) async {
+    try {
+      final partenerData = await _supabase.from('profiluri').select('telefon, email').eq('id', partenerId).single();
+      
+      String numarTelefon = partenerData['telefon'] ?? "";
+      String adresaEmail = partenerData['email'] ?? "";
+
+      if (tip == 'sms' && numarTelefon.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Utilizatorul nu are număr de telefon salvat.")));
+        return;
+      }
+
+      if (tip == 'email' && adresaEmail.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Utilizatorul nu are email salvat.")));
+        return;
+      }
+
+      final Uri uri = tip == 'sms' 
+          ? Uri(scheme: 'sms', path: numarTelefon)
+          : Uri(scheme: 'mailto', path: adresaEmail, query: 'subject=Referitor la programarea Sign Language Hero');
+
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri);
       } else {
@@ -69,7 +214,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Nu am putut deschide aplicația.")));
       }
     } catch (e) {
-      debugPrint(e.toString());
+      debugPrint("Eroare la contactare: $e");
     }
   }
 
@@ -94,7 +239,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     }
   }
 
-  // --- LOGICĂ FORMATĂRE DATĂ ---
   String _formateazaData(String dataIso) {
     try {
       DateTime dt = DateTime.parse(dataIso).toLocal();
@@ -141,45 +285,50 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
         body: TabBarView(
           physics: isVoluntar ? const AlwaysScrollableScrollPhysics() : const NeverScrollableScrollPhysics(),
           children: [
-            // TAB 1: PROGRAMĂRILE MELE (Pentru toți)
-            _buildStreamList(
-              stream: _supabase.from('programari').stream(primaryKey: ['id'])
-                  .eq(isVoluntar ? 'voluntar_id' : 'utilizator_id', myId)
-                  .order('data_ora'),
-              isMarketplace: false,
-            ),
+            _buildStreamList(isMarketplace: false),
             
-            // TAB 2: MARKETPLACE / CERERI NOI (Doar pentru voluntari)
             if (isVoluntar)
-              _buildStreamList(
-                stream: _supabase.from('programari').stream(primaryKey: ['id'])
-                    .eq('status', 'în așteptare')
-                    .order('data_ora'),
-                isMarketplace: true,
-              ),
+              _buildStreamList(isMarketplace: true),
           ],
         ),
       ),
     );
   }
 
-  // --- METODA DE RANDARE A LISTEI ---
-  Widget _buildStreamList({required Stream<List<Map<String, dynamic>>> stream, required bool isMarketplace}) {
+  Widget _buildStreamList({required bool isMarketplace}) {
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: stream,
+      stream: _supabase.from('programari').stream(primaryKey: ['id']),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        var programari = snapshot.data ?? [];
+        var toateProgramarile = List<Map<String, dynamic>>.from(snapshot.data ?? []);
+        bool isVoluntar = widget.rol == 'voluntar';
         
-        // FILTRARE MANUALĂ PENTRU MARKETPLACE (Doar cele fără voluntar)
+        toateProgramarile.sort((a, b) {
+          final dateA = DateTime.tryParse(a['data_ora'].toString()) ?? DateTime.now();
+          final dateB = DateTime.tryParse(b['data_ora'].toString()) ?? DateTime.now();
+          return dateA.compareTo(dateB); 
+        });
+
+        var programari = <Map<String, dynamic>>[];
+        
         if (isMarketplace) {
-          programari = programari.where((p) => p['voluntar_id'] == null).toList();
+          programari = toateProgramarile.where((p) => p['voluntar_id'] == null && p['status'] == 'în așteptare').toList();
         } else {
-          // În Programările Mele ascundem cele "anulate" complet
-          programari = programari.where((p) => p['status'] != 'anulata').toList();
+          String campFiltru = isVoluntar ? 'voluntar_id' : 'utilizator_id';
+          
+          programari = toateProgramarile.where((p) {
+            if (p[campFiltru] != myId) return false;
+            
+            if (p['status'] == 'anulata') return false; 
+            if (p['status'] == 'evaluata') return false; 
+            
+            if (isVoluntar && p['status'] == 'finalizata') return false; 
+            
+            return true;
+          }).toList();
         }
         
         return ListView.builder(
@@ -204,7 +353,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     );
   }
 
-  // --- HEADER EXACT CA ÎN POZĂ ---
   Widget _buildHeaderExact(int count, bool isMarketplace) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
@@ -263,7 +411,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     );
   }
 
-  // --- CARD APPOINTMENT ---
   Widget _buildAppointmentCardExact(Map<String, dynamic> appointment, bool isMarketplace) {
     String status = appointment['status'] ?? 'în așteptare';
     String tipIcoana = appointment['tip_icoana'] ?? 'info';
@@ -274,11 +421,13 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     List<dynamic> participanti = appointment['participanti'] ?? [];
     String nota = appointment['nota_importanta'] ?? '';
 
+    bool isVoluntar = widget.rol == 'voluntar';
+
     String? partenerId;
     if (isMarketplace) {
       partenerId = appointment['utilizator_id'];
     } else {
-      partenerId = widget.rol == 'voluntar' ? appointment['utilizator_id'] : appointment['voluntar_id'];
+      partenerId = isVoluntar ? appointment['utilizator_id'] : appointment['voluntar_id'];
     }
 
     Color themeColor;
@@ -332,7 +481,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                           ],
                         ),
                       ),
-                      if (!isMarketplace) 
+                      if (!isMarketplace && status != 'finalizata') 
                         GestureDetector(
                           onTap: () => _dialogAnulareAvansat(appointment),
                           child: const Text("Anulează", style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold)),
@@ -533,7 +682,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                       width: double.infinity,
                       height: 50,
                       child: ElevatedButton.icon(
-                        onPressed: () => _acceptaCererea(appointment['id']),
+                        onPressed: () => _acceptaCererea(appointment['id'].toString()),
                         icon: const Icon(Icons.handshake, color: Colors.white),
                         label: const Text("ACCEPTĂ CEREREA", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                         style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A), elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
@@ -547,7 +696,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                             child: SizedBox(
                               height: 45,
                               child: ElevatedButton.icon(
-                                onPressed: () => _deschideAplicatie('email'),
+                                onPressed: () => _deschideAplicatie('email', partenerId!),
                                 icon: const Icon(Icons.email_outlined, color: Colors.white, size: 18),
                                 label: const Text("EMAIL", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3B82F6), elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
@@ -559,7 +708,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                             child: SizedBox(
                               height: 45,
                               child: ElevatedButton.icon(
-                                onPressed: () => _deschideAplicatie('sms'),
+                                onPressed: () => _deschideAplicatie('sms', partenerId!),
                                 icon: const Icon(Icons.phone_android, color: Colors.white, size: 18),
                                 label: const Text("SMS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1), elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
@@ -567,7 +716,39 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                             ),
                           ),
                         ],
-                      )
+                      ),
+                    
+                    if (isVoluntar && status == 'confirmat' && appointment['voluntar_id'] != null) ...[
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 45,
+                        child: ElevatedButton.icon(
+                          onPressed: () => _finalizeazaProgramarea(appointment['id'].toString(), appointment['voluntar_id'].toString()),
+                          icon: const Icon(Icons.verified_rounded, color: Colors.white, size: 18),
+                          label: const Text("MARCHEAZĂ CA FINALIZATĂ (+50 XP)", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF59E0B), elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                        ),
+                      ),
+                    ],
+
+                    if (!isVoluntar && status == 'finalizata') ...[
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 45,
+                        child: ElevatedButton.icon(
+                          onPressed: () => _arataDialogRating(appointment),
+                          icon: const Icon(Icons.star_rounded, color: Colors.white, size: 18),
+                          label: const Text("EVALUEAZĂ VOLUNTARUL", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.amber.shade600, 
+                            elevation: 0, 
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+                          ),
+                        ),
+                      ),
+                    ]
                   ]
                 ],
               ),
@@ -585,14 +766,13 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
         Icon(isMarketplace ? Icons.radar_rounded : Icons.event_busy, size: 80, color: Colors.grey.shade300),
         const SizedBox(height: 20),
         Text(
-          isMarketplace ? "Nicio urgență în zonă." : "Nu ai nicio programare.", 
+          isMarketplace ? "Nicio urgență în zonă." : "Nu ai nicio programare activă.", 
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.grey.shade600)
         ),
       ],
     );
   }
 
-  // --- NOU: LOGICĂ GENIALĂ DE ANULARE ȘI DESIGN MODERN ---
   void _dialogAnulareAvansat(Map<String, dynamic> appointment) {
     final controller = TextEditingController();
     bool isVoluntar = widget.rol == 'voluntar';
@@ -613,7 +793,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Iconiță de avertizare
               Container(
                 padding: const EdgeInsets.all(15),
                 decoration: BoxDecoration(color: Colors.red.shade50, shape: BoxShape.circle),
@@ -625,8 +804,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
               ),
               const SizedBox(height: 20),
               
-              // Titlu și Text Dinamic
-              Text("Anulare Programare", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87)),
+              const Text("Anulare Programare", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87)),
               const SizedBox(height: 10),
               Text(
                 isVoluntar 
@@ -637,7 +815,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Căsuța de text pentru motiv
               Container(
                 decoration: BoxDecoration(color: const Color(0xFFF4F7FB), borderRadius: BorderRadius.circular(15)),
                 child: TextField(
@@ -652,7 +829,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
               ),
               const SizedBox(height: 25),
 
-              // Butoanele de acțiune
               Row(
                 children: [
                   Expanded(
@@ -674,14 +850,12 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                         
                         try {
                           if (isVoluntar) {
-                            // Voluntarul anulează -> Se întoarce pe Marketplace (Se notifică utilizatorul live)
                             await _supabase.from('programari').update({
                               'status': 'în așteptare',
-                              'voluntar_id': null, // O tăiem de la el, reapare pe radar!
+                              'voluntar_id': null, 
                               'motiv_anulare': 'Voluntar: $motiv'
                             }).eq('id', appointment['id']);
                           } else {
-                            // Beneficiarul anulează -> Cererea moare complet
                             await _supabase.from('programari').update({
                               'status': 'anulata',
                               'motiv_anulare': 'Beneficiar: $motiv'
@@ -689,7 +863,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                           }
 
                           if (!context.mounted) return;
-                          Navigator.pop(context); // Închide dialogul
+                          Navigator.pop(context); 
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(isVoluntar ? "Cererea a fost eliberată pentru alți voluntari." : "Programare anulată cu succes."), 

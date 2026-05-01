@@ -13,7 +13,6 @@ class BookingScreen extends StatefulWidget {
 class _BookingScreenState extends State<BookingScreen> {
   final _supabase = Supabase.instance.client;
   
-  // Starea formularului
   String _tipSelectat = 'medical';
   DateTime? _dataSelectata;
   TimeOfDay? _oraSelectata;
@@ -21,7 +20,6 @@ class _BookingScreenState extends State<BookingScreen> {
   final TextEditingController _notaController = TextEditingController();
   bool _seIncarca = false;
 
-  // --- FUNCȚIE NOUĂ: GEOCODING (Text -> Coordonate GPS) ---
   Future<Map<String, double>?> _obtineCoordonateGps(String adresa) async {
     try {
       final query = Uri.encodeComponent(adresa);
@@ -49,7 +47,6 @@ class _BookingScreenState extends State<BookingScreen> {
     return null; 
   }
 
-  // --- LOGICĂ PENTRU SALVARE ÎN BAZA DE DATE ---
   Future<void> _trimiteCererea() async {
     if (_dataSelectata == null || _oraSelectata == null || _adresaController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -58,15 +55,33 @@ class _BookingScreenState extends State<BookingScreen> {
       return;
     }
 
+ 
+    final dataFinala = DateTime(
+      _dataSelectata!.year, _dataSelectata!.month, _dataSelectata!.day,
+      _oraSelectata!.hour, _oraSelectata!.minute,
+    );
+
+
+    final limitTime = DateTime.now().add(const Duration(minutes: 15));
+    if (dataFinala.isBefore(limitTime)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("⚠️ Programarea trebuie făcută cu cel puțin 15 minute în avans!"), 
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return; 
+    }
+
     setState(() => _seIncarca = true);
 
     try {
       final idUtilizator = _supabase.auth.currentUser!.id;
 
-      // 1. Transformăm Adresa Text în Coordonate GPS
+
       Map<String, double>? coordonate = await _obtineCoordonateGps(_adresaController.text.trim());
       
-      // LOGICĂ DE BACKUP (Fallback): Dacă geocoding-ul eșuează, folosim locația curentă a utilizatorului din baza de date
+
       if (coordonate == null) {
         final profilData = await _supabase.from('profiluri').select('lat, lng').eq('id', idUtilizator).single();
         if (profilData['lat'] != null && profilData['lng'] != null) {
@@ -79,31 +94,28 @@ class _BookingScreenState extends State<BookingScreen> {
            ScaffoldMessenger.of(context).showSnackBar(
              const SnackBar(content: Text("Nu am putut găsi adresa. Te rugăm să fii mai specific (ex: Oraș, Stradă)."), backgroundColor: Colors.orange),
            );
-           setState(() => _seIncarca = false);
+           setState(() => _seIncarca = false); 
            return; 
         }
       }
 
-      // 2. Combinăm data și ora într-un format ISO
-      final dataFinala = DateTime(
-        _dataSelectata!.year, _dataSelectata!.month, _dataSelectata!.day,
-        _oraSelectata!.hour, _oraSelectata!.minute,
-      ).toLocal().toIso8601String(); // toLocal() previne offset-urile nedorite
 
-      // 3. Setăm titlurile în funcție de categorie
+      final dataFinalaIso = dataFinala.toLocal().toIso8601String();
+
+   
       String titlu;
       if (_tipSelectat == 'medical') titlu = "Consultație Medicală";
       else if (_tipSelectat == 'primarie') titlu = "Întâlnire Instituții/Primărie";
       else if (_tipSelectat == 'video') titlu = "Apel Video Urgent";
       else titlu = "Asistență Generală";
 
-      // 4. Trimitem în baza de date
+
       await _supabase.from('programari').insert({
         'utilizator_id': idUtilizator, 
         'titlu': titlu,
         'subtitlu': 'Se caută voluntar...',
         'tip_icoana': _tipSelectat,
-        'data_ora': dataFinala,
+        'data_ora': dataFinalaIso,
         'durata_minute': 60,
         'locatie_nume': 'Locație fixată pe hartă',
         'locatie_adresa': _adresaController.text.trim(),
@@ -128,7 +140,6 @@ class _BookingScreenState extends State<BookingScreen> {
     }
   }
 
-  // --- LOGICĂ ALEGERE DATĂ/ORĂ ---
   Future<void> _alegeData() async {
     final aleasa = await showDatePicker(
       context: context,
@@ -147,7 +158,6 @@ class _BookingScreenState extends State<BookingScreen> {
     if (aleasa != null) setState(() => _oraSelectata = aleasa);
   }
 
-  // --- INTERFAȚA GRAFICĂ (UI) ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -178,7 +188,6 @@ class _BookingScreenState extends State<BookingScreen> {
               const Text("Pentru ce ai nevoie de ajutor?", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
               const SizedBox(height: 15),
               
-              // CĂSUȚE CATEGORIE
               Row(
                 children: [
                   Expanded(child: _buildCategorieCard('medical', "Spital / Medic", Icons.medical_information, const Color(0xFF10B981))),
@@ -199,7 +208,7 @@ class _BookingScreenState extends State<BookingScreen> {
               const Text("Când are loc?", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
               const SizedBox(height: 15),
 
-              // DATA ȘI ORA
+  
               Row(
                 children: [
                   Expanded(
@@ -227,7 +236,12 @@ class _BookingScreenState extends State<BookingScreen> {
                         child: Row(
                           children: [
                             const Icon(Icons.access_time, color: Color(0xFF6366F1)), const SizedBox(width: 10),
-                            Expanded(child: Text(_oraSelectata == null ? "Alege Ora" : _oraSelectata!.format(context), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87), overflow: TextOverflow.ellipsis)),
+                            Expanded(child: Text(
+              
+                              _oraSelectata == null ? "Alege Ora" : "${_oraSelectata!.hour.toString().padLeft(2, '0')}:${_oraSelectata!.minute.toString().padLeft(2, '0')}", 
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87), 
+                              overflow: TextOverflow.ellipsis
+                            )),
                           ],
                         ),
                       ),
@@ -240,12 +254,12 @@ class _BookingScreenState extends State<BookingScreen> {
               const Text("Unde ne vedem?", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
               const SizedBox(height: 15),
 
-              // ADRESĂ
+          
               Container(
                 decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey.shade300)),
                 child: TextField(
                   controller: _adresaController,
-                  textInputAction: TextInputAction.next, // Facilitează trecerea la câmpul următor
+                  textInputAction: TextInputAction.next, 
                   decoration: const InputDecoration(
                     hintText: "Ex: București, Strada Calea Floreasca 8",
                     prefixIcon: Icon(Icons.location_on, color: Color(0xFF10B981)),
@@ -259,7 +273,7 @@ class _BookingScreenState extends State<BookingScreen> {
               const Text("Detalii suplimentare (Opțional)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
               const SizedBox(height: 15),
 
-              // NOTĂ
+
               Container(
                 decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey.shade300)),
                 child: TextField(
@@ -276,7 +290,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
               const SizedBox(height: 40),
 
-              // BUTON SUBMIT
+  
               SizedBox(
                 width: double.infinity,
                 height: 55,
@@ -297,7 +311,7 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
-  // Widget pentru Categoriile Colorate
+
   Widget _buildCategorieCard(String id, String titlu, IconData icon, Color color) {
     bool isSelected = _tipSelectat == id;
     return GestureDetector(
@@ -306,7 +320,7 @@ class _BookingScreenState extends State<BookingScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 20),
         decoration: BoxDecoration(
-          color: isSelected ? color.withValues(alpha: 0.1) : Colors.white, // Reparat cu withValues
+          color: isSelected ? color.withValues(alpha: 0.1) : Colors.white, 
           border: Border.all(color: isSelected ? color : Colors.grey.shade200, width: 2),
           borderRadius: BorderRadius.circular(15),
         ),

@@ -3,10 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screen/login_screen.dart';
 
 void main() async {
-  // 1. Pornim motorul Flutter
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 2. Facem conexiunea cu baza de date
   await Supabase.initialize(
     url: 'https://nmjksiotpkvwzlhemuzr.supabase.co',
     anonKey: 'sb_publishable_RwktDbQbp0RKUTEyAA0AQQ_b-eZNrkD',

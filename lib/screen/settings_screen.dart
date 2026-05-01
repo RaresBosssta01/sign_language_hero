@@ -8,13 +8,12 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  // Variabile pentru a tine minte starea butoanelor (ON/OFF)
   bool _vibrationAlerts = true;
   bool _highContrast = false;
   bool _shareLocation = true;
-  bool _ghostMode = false; // Modul "Nu ma deranja" pentru voluntari
+  bool _ghostMode = false;
   
-  String _preferredInterpreter = "Oricare"; // Ideea ta geniala!
+  String _preferredInterpreter = "Oricare"; 
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +31,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         physics: const BouncingScrollPhysics(),
         children: [
           
-          // --- SECTIUNEA 1: Accesibilitate (Esential pentru deficiente de auz) ---
           const Text("ACCESIBILITATE", style: TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
           const SizedBox(height: 10),
           _buildSettingsCard(
@@ -58,7 +56,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 25),
 
-          // --- SECTIUNEA 2: Siguranta si Confort (Ideea ta!) ---
           const Text("SIGURANȚĂ & CONFORT", style: TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
           const SizedBox(height: 10),
           _buildSettingsCard(
@@ -96,7 +93,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 25),
 
-          // --- SECTIUNEA 3: Locatie si Intimitate ---
           const Text("LOCAȚIE & INTIMITATE", style: TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
           const SizedBox(height: 10),
           _buildSettingsCard(
@@ -127,7 +123,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // --- WIDGET HELPER: Cardul alb care tine setarile ---
+
   Widget _buildSettingsCard({required List<Widget> children}) {
     return Container(
       decoration: BoxDecoration(
@@ -139,7 +135,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // --- WIDGET HELPER: Butonul de tip ON/OFF (Switch) ---
+
   Widget _buildSwitchTile(String title, String subtitle, IconData icon, Color iconColor, bool value, Function(bool) onChanged) {
     return SwitchListTile(
       value: value,
@@ -155,12 +151,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // --- WIDGET HELPER: Linia de separare intre setari ---
+
   Widget _buildDivider() {
     return Divider(height: 1, indent: 60, endIndent: 20, color: Colors.grey.shade200);
   }
 
-  // --- FUNCTIE: Fereastra (Dialog) pentru alegerea genului ---
+ 
   void _showInterpreterPreferenceDialog() {
     showDialog(
       context: context,
@@ -200,7 +196,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         setState(() {
           _preferredInterpreter = value;
         });
-        Navigator.pop(context); // Inchide fereastra
+        Navigator.pop(context); 
       },
       child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
     );

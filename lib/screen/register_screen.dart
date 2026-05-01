@@ -12,9 +12,8 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStateMixin {
-  // --- STĂRI PENTRU UX (FLOW) ---
-  int _currentStep = 0; // 0 = Selecție Rol, 1 = Formular
-  String _rolSelectat = 'beneficiar'; // default
+  int _currentStep = 0; 
+  String _rolSelectat = 'beneficiar'; 
   
   bool _isUploading = false;
   bool _isLoading = false; 
@@ -40,16 +39,14 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
   final _descriereController = TextEditingController();
   final _competenteController = TextEditingController();
 
-  // --- CONTROLLERE PENTRU ANIMAȚIILE CARDURILOR ---
+
   late AnimationController _animCtrlBeneficiar;
   late AnimationController _animCtrlVoluntar;
 
   @override
   void initState() {
     super.initState();
-    // Animație lentă și fluidă pentru cardul Beneficiar
     _animCtrlBeneficiar = AnimationController(vsync: this, duration: const Duration(seconds: 3))..repeat(reverse: true);
-    // Animație mai energică pentru cardul Voluntar
     _animCtrlVoluntar = AnimationController(vsync: this, duration: const Duration(milliseconds: 2500))..repeat(reverse: true);
   }
 
@@ -70,9 +67,6 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
     super.dispose();
   }
 
-  // ============================================================================
-  // LOGICĂ DE BUSINESS (Păstrată 100% din codul tău)
-  // ============================================================================
   Future<void> _incarcaDocument() async {
     setState(() => _isUploading = true);
     try {
@@ -138,6 +132,8 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
           'nume': _numeController.text.trim(),
           'telefon': _telefonController.text.trim().isEmpty ? null : _telefonController.text.trim(),
           'varsta': varsta,
+          'descriere': _descriereController.text.trim().isNotEmpty ? _descriereController.text.trim() : null,
+          'interese': _competenteController.text.trim().isNotEmpty ? _competenteController.text.trim() : null,
           'status': _rolSelectat == 'voluntar' ? 'pending' : 'aprobat',
           'document': _numeFisierUrcat.isEmpty ? null : _numeFisierUrcat,
         });
@@ -193,9 +189,6 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
     );
   }
 
-  // ============================================================================
-  // UI: LAYOUT PRINCIPAL (Animated Switcher pentru Flow)
-  // ============================================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -210,7 +203,6 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
             switchInCurve: Curves.easeOutExpo,
             switchOutCurve: Curves.easeInExpo,
             transitionBuilder: (Widget child, Animation<double> animation) {
-              // Efect superb de glisare și fade
               return FadeTransition(
                 opacity: animation,
                 child: SlideTransition(
@@ -219,7 +211,6 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                 ),
               );
             },
-            // Afișăm ecranul de selecție SAU formularul în funcție de step
             child: _currentStep == 0 ? _buildRoleSelectionScreen() : _buildFormScreen(),
           ),
         ),
@@ -227,17 +218,13 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
     );
   }
 
-  // ============================================================================
-  // STEP 1: ECRANUL DE SELECȚIE A ROLULUI (CĂRȚI ANIMATE)
-  // ============================================================================
   Widget _buildRoleSelectionScreen() {
     return SingleChildScrollView(
-      key: const ValueKey("RoleSelection"), // Cheie necesară pentru AnimatedSwitcher
+      key: const ValueKey("RoleSelection"),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Buton de întoarcere la Login
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
@@ -252,7 +239,7 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
           const Text("Alege rolul care ți se potrivește cel mai bine în comunitatea noastră.", style: TextStyle(fontSize: 16, color: Colors.grey), textAlign: TextAlign.center),
           const SizedBox(height: 40),
 
-          // CARD 1: BENEFICIAR
+      
           GestureDetector(
             onTap: () {
               setState(() { _rolSelectat = 'beneficiar'; _currentStep = 1; });
@@ -266,7 +253,6 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
               ),
               child: Stack(
                 children: [
-                  // Textele
                   const Positioned(
                     bottom: 25, left: 25,
                     child: Column(
@@ -278,7 +264,6 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                       ],
                     ),
                   ),
-                  // Animația Emojis
                   AnimatedBuilder(
                     animation: _animCtrlBeneficiar,
                     builder: (context, child) {
@@ -299,7 +284,7 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
           
           const SizedBox(height: 30),
 
-          // CARD 2: VOLUNTAR
+       
           GestureDetector(
             onTap: () {
               setState(() { _rolSelectat = 'voluntar'; _currentStep = 1; });
@@ -313,7 +298,6 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
               ),
               child: Stack(
                 children: [
-                  // Textele
                   const Positioned(
                     bottom: 25, left: 25,
                     child: Column(
@@ -325,7 +309,6 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                       ],
                     ),
                   ),
-                  // Animația Emojis
                   AnimatedBuilder(
                     animation: _animCtrlVoluntar,
                     builder: (context, child) {
@@ -348,9 +331,6 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
     );
   }
 
-  // ============================================================================
-  // STEP 2: FORMULARUL SPECIFIC ROLULUI
-  // ============================================================================
   Widget _buildFormScreen() {
     bool isVoluntar = _rolSelectat == 'voluntar';
     Color themeColor = isVoluntar ? const Color(0xFF00796B) : const Color(0xFF0083B0);
@@ -361,11 +341,10 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       child: Column(
         children: [
-          // HEADER CU BUTON ÎNAPOI
           Row(
             children: [
               IconButton(
-                onPressed: () => setState(() => _currentStep = 0), // Întoarcere la carduri
+                onPressed: () => setState(() => _currentStep = 0),
                 icon: Icon(Icons.arrow_back_ios_new_rounded, color: themeColor),
               ),
               Expanded(
@@ -375,12 +354,11 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                   textAlign: TextAlign.center,
                 ),
               ),
-              const SizedBox(width: 48), // Pentru a centra titlul
+              const SizedBox(width: 48), 
             ],
           ),
           const SizedBox(height: 20),
 
-          // CONTAINERUL FORMULARULUI
           Container(
             padding: const EdgeInsets.all(25),
             decoration: BoxDecoration(
@@ -403,7 +381,6 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                   _buildInputField(label: "Username", hint: "ionpopescu", icon: Icons.alternate_email, controller: _usernameController, activeColor: themeColor),
                   _buildInputField(label: "Email", hint: "ion@example.com", icon: Icons.mail_outline, controller: _emailController, activeColor: themeColor),
                   
-                  // TELEFON (Afișat DOAR la voluntari, conform logicii anterioare)
                   if (isVoluntar)
                      _buildInputField(label: "Număr Telefon (Obligatoriu)", hint: "07xx xxx xxx", icon: Icons.phone_android, controller: _telefonController, isNumber: true, activeColor: themeColor),
 
@@ -424,7 +401,6 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                     ],
                   ),
 
-                  // SECȚIUNI SPECIFICE
                   if (!isVoluntar) ...[
                     Padding(padding: const EdgeInsets.symmetric(vertical: 15), child: Divider(color: themeColor.withValues(alpha: 0.2), thickness: 1)),
                     Text("Preferințe Voluntar", style: TextStyle(fontWeight: FontWeight.bold, color: themeColor, fontSize: 16)),
@@ -442,8 +418,8 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                     Padding(padding: const EdgeInsets.symmetric(vertical: 15), child: Divider(color: themeColor.withValues(alpha: 0.2), thickness: 1)),
                     Text("Profil Voluntar", style: TextStyle(fontWeight: FontWeight.bold, color: themeColor, fontSize: 16)),
                     const SizedBox(height: 10),
-                    _buildInputField(label: "Despre tine (Opțional)", hint: "Sunt pasionat de...", icon: Icons.info_outline, controller: _descriereController, maxLines: 3, activeColor: themeColor),
-                    _buildInputField(label: "Alte competențe (Opțional)", hint: "Ex: Prim ajutor", icon: Icons.star_border_rounded, controller: _competenteController, activeColor: themeColor),
+                    _buildInputField(label: "Despre tine (Opțional)", hint: "Sunt pasionat de...", icon: Icons.info_outline, controller: _descriereController, maxLines: 3, activeColor: themeColor, isOptional: true),
+                    _buildInputField(label: "Alte competențe (Opțional)", hint: "Ex: Prim ajutor", icon: Icons.star_border_rounded, controller: _competenteController, activeColor: themeColor, isOptional: true),
                     
                     const SizedBox(height: 10),
                     const Text("Documente Oficiale", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
@@ -465,7 +441,6 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
 
                   const SizedBox(height: 30),
 
-                  // BUTON FINAL DE CREARE CONT
                   SizedBox(
                     width: double.infinity, height: 55,
                     child: Container(
@@ -492,10 +467,10 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
     );
   }
 
-  // --- WIDGETURI REUTILIZABILE (Ajustate pentru a prelua culori dinamice) ---
   Widget _buildInputField({
     required String label, required String hint, required IconData icon, required TextEditingController controller, 
-    required Color activeColor, bool isPassword = false, bool isNumber = false, int maxLines = 1, bool obscureText = false, VoidCallback? onToggleVisibility
+    required Color activeColor, bool isPassword = false, bool isNumber = false, int maxLines = 1, bool obscureText = false, VoidCallback? onToggleVisibility, 
+    bool isOptional = false 
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 15),
@@ -516,7 +491,10 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
               focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: activeColor, width: 2)),
             ),
-            validator: (value) => (value == null || value.isEmpty) ? 'Obligatoriu' : null,
+            validator: (value) {
+              if (isOptional) return null; 
+              return (value == null || value.isEmpty) ? 'Obligatoriu' : null;
+            },
           ),
         ],
       ),

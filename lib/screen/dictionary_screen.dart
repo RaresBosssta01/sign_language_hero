@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-// Importăm ecranul cu camera (Oglinda)
 import 'mirror_screen.dart'; 
 
-// --------------------------------------------------------
-// ECRANUL DICȚIONAR (Stil TikTok + Mod Căutare)
-// --------------------------------------------------------
+
 class DictionaryScreen extends StatefulWidget {
   const DictionaryScreen({super.key});
 
@@ -13,7 +10,6 @@ class DictionaryScreen extends StatefulWidget {
 }
 
 class _DictionaryScreenState extends State<DictionaryScreen> {
-  // Baza de date locală cu semnele pe care le învățăm
   final List<Map<String, dynamic>> _semne = [
     {
       'titlu': 'Urgență / Ajutor',
@@ -59,10 +55,10 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     }
   ];
 
-  // Controlerul pentru scroll-ul vertical (Reels)
+
   late PageController _pageController;
   
-  // Starea pentru căutare
+
   bool _isSearchMode = false;
   List<Map<String, dynamic>> _semneFiltrate = [];
   final TextEditingController _searchController = TextEditingController();
@@ -71,7 +67,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   void initState() {
     super.initState();
     _pageController = PageController();
-    _semneFiltrate = List.from(_semne); // Inițial, afișăm toate semnele
+    _semneFiltrate = List.from(_semne); 
   }
 
   @override
@@ -80,8 +76,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     _searchController.dispose();
     super.dispose();
   }
-
-  // Funcție de filtrare live
   void _filtreazaSemne(String query) {
     setState(() {
       if (query.isEmpty) {
@@ -95,7 +89,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     });
   }
 
-  // Funcție care te duce la videoclipul selectat din căutare
   void _mergiLaSemn(Map<String, dynamic> semnSelectat) {
     int index = _semne.indexOf(semnSelectat);
     setState(() {
@@ -103,7 +96,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
       _searchController.clear();
       _semneFiltrate = List.from(_semne);
     });
-    // Sărim direct la videoclipul corect în Feed
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_pageController.hasClients) {
         _pageController.jumpToPage(index);
@@ -155,7 +147,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     );
   }
 
-  // --- MODUL 1: FEED TIKTOK / REELS ---
   Widget _buildFeedMode() {
     return PageView.builder(
       controller: _pageController,
@@ -167,11 +158,9 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     );
   }
 
-  // --- MODUL 2: CĂUTARE (Când ai nevoie rapid de un cuvânt) ---
   Widget _buildSearchGrid() {
     return Column(
       children: [
-        // Bara de căutare text
         Padding(
           padding: const EdgeInsets.all(15.0),
           child: TextField(
@@ -191,7 +180,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
           ),
         ),
         
-        // Grila de rezultate
         Expanded(
           child: _semneFiltrate.isEmpty
             ? Center(
@@ -249,12 +237,10 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     );
   }
 
-  // --- COMPONENTA VIZUALĂ PENTRU FIECARE SEMN (Tiktok Card) ---
   Widget _buildVideoCard(Map<String, dynamic> semn) {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // 1. ZONA VIDEO (Fundalul ecranului)
         Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -286,7 +272,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
           ),
         ),
 
-        // Gradient negru în partea de jos pentru a putea citi textul
         Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -297,7 +282,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
           ),
         ),
 
-        // 2. INFORMAȚIILE ȘI BUTOANELE (Partea de jos a ecranului)
         SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(20.0),
@@ -305,7 +289,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                // Eticheta Categoriei (ex: Medical)
                 Row(
                   children: [
                     Container(
@@ -323,11 +306,9 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                 ),
                 const SizedBox(height: 15),
                 
-                // Titlul Semnului
                 Text(semn['titlu'], style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold, height: 1.1)),
                 const SizedBox(height: 20),
 
-                // Cardul "AI Co-Pilot" (Sfatul)
                 Container(
                   padding: const EdgeInsets.all(15),
                   decoration: BoxDecoration(
@@ -355,7 +336,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                 ),
                 const SizedBox(height: 25),
 
-                // Butonul "Camera / Încearcă Tu" care deschide ecranul Oglindă
                 SizedBox(
                   width: double.infinity,
                   height: 55,

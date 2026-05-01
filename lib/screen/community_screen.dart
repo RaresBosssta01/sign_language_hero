@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// ============================================================================
-// 1. ECRANUL PRINCIPAL: LISTA DE MESAJE ȘI TAB-URILE
-// ============================================================================
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({super.key});
 
@@ -15,7 +12,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
   final _supabase = Supabase.instance.client;
   final TextEditingController _searchController = TextEditingController();
   
-  bool isComunitateTab = false; // False = Personal, True = Comunitate
   String _searchQuery = "";
   late String myId;
 
@@ -36,169 +32,87 @@ class _CommunityScreenState extends State<CommunityScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(130), 
+        preferredSize: const Size.fromHeight(80), 
         child: Container(
           decoration: const BoxDecoration(
             color: Color(0xFF6366F1), 
             borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
           ),
           child: SafeArea(
-            child: Column(
-              children: [
-                // Rândul 1: Titlu
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-                  child: Row(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  const SizedBox(width: 10),
+                  const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                      const SizedBox(width: 10),
-                      const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      Text("Mesaje Private", style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                      Row(
                         children: [
-                          Text("Mesaje", style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                          Row(
-                            children: [
-                              Icon(Icons.circle, color: Colors.greenAccent, size: 10),
-                              SizedBox(width: 5),
-                              Text("Online", style: TextStyle(color: Colors.white70, fontSize: 12)),
-                            ],
-                          )
+                          Icon(Icons.circle, color: Colors.greenAccent, size: 10),
+                          SizedBox(width: 5),
+                          Text("Sistem Live", style: TextStyle(color: Colors.white70, fontSize: 12)),
                         ],
-                      ),
-                      const Spacer(),
+                      )
                     ],
                   ),
-                ),
-                // Rândul 2: Tab-urile Comunitate / Personal
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Container(
-                    height: 45,
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(25)),
-                    child: Row(
-                      children: [
-                        _buildTabButton("COMUNITATE", true, 3),
-                        _buildTabButton("PERSONAL", false, 4),
-                      ],
-                    ),
-                  ),
-                )
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
       body: Column(
         children: [
-          // Bara de Căutare și Filtre
           Padding(
             padding: const EdgeInsets.all(15),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 15),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey.shade200)),
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: (value) {
-                      setState(() {
-                        _searchQuery = value.toLowerCase();
-                      });
-                    },
-                    decoration: const InputDecoration(icon: Icon(Icons.search, color: Colors.grey), hintText: "Caută conversații...", border: InputBorder.none),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Meniul de filtrare va fi deschis curând.")));
-                        }, 
-                        icon: const Icon(Icons.filter_list, size: 16), 
-                        label: const Text("Filtrează"), 
-                        style: OutlinedButton.styleFrom(foregroundColor: Colors.black87, side: BorderSide(color: Colors.grey.shade300))
-                      )
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Afișăm conversațiile fixate...")));
-                        }, 
-                        icon: const Icon(Icons.push_pin_outlined, size: 16), 
-                        label: const Text("Fixate"), 
-                        style: OutlinedButton.styleFrom(foregroundColor: Colors.black87, side: BorderSide(color: Colors.grey.shade300))
-                      )
-                    ),
-                  ],
-                )
-              ],
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 15),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey.shade200)),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value.toLowerCase();
+                  });
+                },
+                decoration: const InputDecoration(icon: Icon(Icons.search, color: Colors.grey), hintText: "Caută o persoană...", border: InputBorder.none),
+              ),
             ),
           ),
           
-          // Lista Principală (Se schimbă în funcție de Tab-ul selectat)
           Expanded(
-            child: isComunitateTab ? _buildCommunityGroups() : _buildPersonalChats(),
+            child: _buildPersonalChats(),
           ),
         ],
       ),
     );
   }
 
-  // --- TAB-UL COMUNITATE (Grupuri) ---
-  Widget _buildCommunityGroups() {
-    final groups = [
-      {"titlu": "Grup Comunitate Surditate", "subtitlu": "Maria: Mulțumesc pentru ajutor! 🙏", "icon": Icons.people, "color": Colors.blue},
-      {"titlu": "Interpreți Limbaj Semne", "subtitlu": "Interpret disponibil mâine la 14:00", "icon": Icons.sign_language, "color": Colors.purple},
-      {"titlu": "Voluntari București", "subtitlu": "Eveniment sâmbăta la 10:00! 🎉", "icon": Icons.favorite, "color": Colors.teal},
-    ];
 
-    final filteredGroups = groups.where((g) => g["titlu"].toString().toLowerCase().contains(_searchQuery)).toList();
-
-    return ListView.builder(
-      itemCount: filteredGroups.length,
-      itemBuilder: (context, index) {
-        final g = filteredGroups[index];
-        return ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          leading: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: g["color"] as Color, borderRadius: BorderRadius.circular(15)),
-            child: Icon(g["icon"] as IconData, color: Colors.white),
-          ),
-          title: Text(g["titlu"].toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
-          subtitle: Text(g["subtitlu"].toString(), style: const TextStyle(fontSize: 12, color: Colors.grey), maxLines: 1, overflow: TextOverflow.ellipsis),
-          trailing: const Icon(Icons.push_pin, color: Colors.grey, size: 16),
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Intri în grupul: ${g["titlu"]}...")));
-          },
-        );
-      },
-    );
-  }
-
-  // --- TAB-UL PERSONAL ---
   Widget _buildPersonalChats() {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: _supabase.from('profiluri').stream(primaryKey: ['id']),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return const Center(child: Text("Eroare la încărcarea contactelor."));
         
         final allProfiles = snapshot.data ?? [];
-        
+        if (allProfiles.isEmpty) return const Center(child: Text("Nu există utilizatori."));
+
         final myProfile = allProfiles.firstWhere((p) => p['id'] == myId, orElse: () => {});
         final String myRole = myProfile['rol'] ?? 'beneficiar';
 
         var users = allProfiles.where((p) => p['id'] != myId).toList();
 
-        // Reguli de filtrare bazate pe rol
         if (myRole == 'beneficiar') {
-          users = users.where((p) => p['rol'] == 'voluntar').toList();
+          users = users.where((p) => p['rol'] == 'voluntar' || p['rol'] == 'admin').toList();
         } else if (myRole == 'voluntar') {
           users = users.where((p) => p['rol'] == 'beneficiar' || p['rol'] == 'admin').toList();
         }
@@ -211,7 +125,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
         }
 
         if (users.isEmpty) {
-          return const Center(child: Text("Nu a fost găsită nicio conversație.", style: TextStyle(color: Colors.grey)));
+          return const Center(child: Text("Nu a fost găsită nicio persoană.", style: TextStyle(color: Colors.grey)));
         }
 
         return ListView.builder(
@@ -220,7 +134,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
             final user = users[index];
             final String numeComplet = "${user['prenume'] ?? 'Utilizator'} ${user['nume'] ?? ''}";
             
-            // Verificăm dacă există proprietatea is_online în tabel, altfel punem false
             final bool isOnline = user.containsKey('is_online') ? user['is_online'] == true : false;
 
             return ListTile(
@@ -248,7 +161,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
               ),
               title: Text(numeComplet, style: const TextStyle(fontWeight: FontWeight.bold)),
               subtitle: Text(user['rol']?.toString().toUpperCase() ?? 'MEMBRU', style: const TextStyle(color: Color(0xFF6366F1), fontSize: 11, fontWeight: FontWeight.w600)),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 12, color: Colors.grey),
+              trailing: const Icon(Icons.chat_bubble_outline, size: 18, color: Colors.grey),
               onTap: () {
                 Navigator.push(context, MaterialPageRoute(builder: (context) => ChatDetailScreen(partenerId: user['id'], partenerNume: numeComplet)));
               },
@@ -258,40 +171,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
       },
     );
   }
-
-  Widget _buildTabButton(String text, bool isComunitate, int badgeCount) {
-    bool isSelected = isComunitateTab == isComunitate;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => isComunitateTab = isComunitate),
-        child: Container(
-          decoration: BoxDecoration(
-            color: isSelected ? Colors.white : Colors.transparent,
-            borderRadius: BorderRadius.circular(25),
-          ),
-          child: Center(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(isComunitate ? Icons.people_alt : Icons.chat_bubble_outline, color: isSelected ? const Color(0xFF6366F1) : Colors.white, size: 16),
-                const SizedBox(width: 8),
-                Text(text, style: TextStyle(color: isSelected ? const Color(0xFF6366F1) : Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                if (badgeCount > 0) ...[
-                  const SizedBox(width: 8),
-                  Container(padding: const EdgeInsets.all(5), decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle), child: Text(badgeCount.toString(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))),
-                ]
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
-// ============================================================================
-// 2. ECRANUL DE CHAT (Conversația Real-Time)
-// ============================================================================
 class ChatDetailScreen extends StatefulWidget {
   final String partenerId;
   final String partenerNume;
@@ -314,12 +195,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     _marcheazaMesajeleCaCitite();
   }
 
-  // Setăm mesajele primite ca fiind citite când intrăm în chat
   Future<void> _marcheazaMesajeleCaCitite() async {
     try {
       await _supabase.from('mesaje').update({'citit': true}).match({
-        'sender_id': widget.partenerId, // ACUM FOLOSIM SENDER_ID
-        'receiver_id': myId,            // ACUM FOLOSIM RECEIVER_ID
+        'sender_id': widget.partenerId, 
+        'receiver_id': myId,            
         'citit': false
       });
     } catch (e) {
@@ -334,12 +214,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     _mesajController.clear();
     
     try {
-      // INSERARE CU NUMELE CORECTE DE COLOANE DIN SCHEMA TA
       await _supabase.from('mesaje').insert({
         'sender_id': myId,
         'receiver_id': widget.partenerId,
-        'text': trimiteText,     // Coloana ta originală (NOT NULL 🔹)
-        'continut': trimiteText, // Și coloana ta nouă
+        'text': trimiteText,     
+        'continut': trimiteText, 
         'citit': false
       });
     } catch (e) {
@@ -367,10 +246,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         elevation: 1,
         iconTheme: const IconThemeData(color: Colors.black87),
         title: StreamBuilder<List<Map<String, dynamic>>>(
-          stream: _supabase.from('profiluri').stream(primaryKey: ['id']).eq('id', widget.partenerId),
+          stream: _supabase.from('profiluri').stream(primaryKey: ['id']),
           builder: (context, snapshot) {
-            final profile = snapshot.data?.isNotEmpty == true ? snapshot.data!.first : null;
-            final bool isOnline = profile != null && profile.containsKey('is_online') && profile['is_online'] == true;
+            final allProfiles = snapshot.data ?? [];
+            final profile = allProfiles.firstWhere((p) => p['id'] == widget.partenerId, orElse: () => {});
+            
+            final bool isOnline = profile.isNotEmpty && profile['is_online'] == true;
 
             return Row(
               children: [
@@ -398,19 +279,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       ),
       body: Column(
         children: [
-          // ZONA DE MESAJE (Live Stream)
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _supabase.from('mesaje')
-                  .stream(primaryKey: ['id'])
-                  .order('created_at', ascending: false), 
+              stream: _supabase.from('mesaje').stream(primaryKey: ['id']), 
               builder: (context, snapshot) {
                 if (snapshot.hasError) return const Center(child: Text("Eroare la încărcarea mesajelor"));
                 if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
                 
-                final toateMesajele = snapshot.data ?? [];
+                final toateMesajele = List<Map<String, dynamic>>.from(snapshot.data ?? []);
                 
-                // FOLOSIM ACUM SENDER_ID și RECEIVER_ID PENTRU FILTRARE!
+                toateMesajele.sort((a, b) {
+                  final dateA = DateTime.tryParse(a['created_at'].toString()) ?? DateTime.now();
+                  final dateB = DateTime.tryParse(b['created_at'].toString()) ?? DateTime.now();
+                  return dateB.compareTo(dateA); 
+                });
+
                 final conversatiaNoastra = toateMesajele.where((msg) => 
                   (msg['sender_id'] == myId && msg['receiver_id'] == widget.partenerId) ||
                   (msg['sender_id'] == widget.partenerId && msg['receiver_id'] == myId)
@@ -421,12 +304,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 }
 
                 return ListView.builder(
-                  reverse: true, // Afișează de jos în sus
+                  reverse: true, 
                   padding: const EdgeInsets.only(bottom: 20, top: 10),
                   itemCount: conversatiaNoastra.length,
                   itemBuilder: (context, index) {
                     final mesaj = conversatiaNoastra[index];
-                    final isMe = mesaj['sender_id'] == myId; // VERIFICARE CORECTĂ
+                    final isMe = mesaj['sender_id'] == myId; 
 
                     return _buildBulaMesaj(mesaj, isMe);
                   },
@@ -435,7 +318,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             ),
           ),
           
-          // BARA DE JOS PENTRU SCRIS
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))]),
@@ -486,12 +368,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
   }
 
-  // Construirea bulei de mesaj
   Widget _buildBulaMesaj(Map<String, dynamic> mesaj, bool isMe) {
     String time = _formateazaOraMesaj(mesaj['created_at']);
     bool isRead = mesaj['citit'] == true;
     
-    // Extragem textul din coloana originală 'text' sau fallback pe 'continut'
     String continutText = mesaj['text'] ?? mesaj['continut'] ?? "";
 
     return Align(

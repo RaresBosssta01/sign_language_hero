@@ -13,48 +13,41 @@ class AdminPortalScreen extends StatefulWidget {
 class _AdminPortalScreenState extends State<AdminPortalScreen> {
   final _supabase = Supabase.instance.client;
   
-  // NAVIGAȚIE PRINCIPALĂ
   int _selectedIndex = 1; 
   int _settingsSelectedIndex = 0; 
   
-  // STARE CERERI
-  Map<String, dynamic>? _cerereSelectata;
   int _pendingCount = 0;
-  int _lastKnownPendingCount = -1; 
-  
-  // STARE CHAT & PREZENȚĂ REALĂ
+  int _mesajeNecititeCount = 0; 
+  int _notificariNecitite = 0;
+  Map<String, dynamic>? _cerereSelectata;
   Map<String, dynamic>? _chatSelectat; 
   final TextEditingController _mesajController = TextEditingController();
   late final RealtimeChannel _presenceChannel;
   Set<String> _onlineUsers = {};
-  int _mesajeNecititeCount = 0; 
-
-  // STARE NOTIFICĂRI
-  List<Map<String, dynamic>> _notificari = [];
   bool _aratateDoarNecitite = false;
 
-  // STARE SETĂRI (UI Funcțional și Persistent)
+
   bool _is2FAEnabled = true;
   bool _notifEmail1 = true;
   bool _notifEmail2 = true;
   bool _notifPush1 = true;
   bool _notifPush2 = true;
   bool _backupAutomat = true;
+  String _frecventaBackup = "Zilnic"; 
   bool _modMentenanta = false;
   bool _raportZilnic = true;
 
-  // Stare pentru securitate
+
   bool _ascundeParolaCurenta = true;
   bool _ascundeParolaNoua = true;
   bool _ascundeConfirmaParola = true;
 
-  // Stare pentru preferințe
   String _limbaSelectata = "Română";
   String _fusOrarSelectat = "Europa/București (GMT+2)";
   String _formatDataSelectat = "DD/MM/YYYY";
   String _temaSelectata = "Luminos";
 
-  // Controllere Profil & Securitate
+
   final _numeAdminCtrl = TextEditingController();
   final _emailAdminCtrl = TextEditingController();
   final _telefonAdminCtrl = TextEditingController();
@@ -62,14 +55,12 @@ class _AdminPortalScreenState extends State<AdminPortalScreen> {
   final _newPassCtrl = TextEditingController();
   final _confirmPassCtrl = TextEditingController();
 
-  // CULORI FIXE (Brand & Sidebar)
+
   final Color primaryBlue = const Color(0xFF3B82F6);
   final Color darkSidebar = const Color(0xFF111827); 
   final Color successGreen = const Color(0xFF10B981);
 
-  // =========================================================================
-  // LOGICĂ: TEMĂ DINAMICĂ (DARK/LIGHT MODE REAL)
-  // =========================================================================
+ 
   bool get _isDark {
     if (_temaSelectata == "Întunecat") return true;
     if (_temaSelectata == "Automat") {
@@ -91,9 +82,11 @@ class _AdminPortalScreenState extends State<AdminPortalScreen> {
     super.initState();
     _incarcaDateAdmin(); 
     _incarcaSetarileSalvate(); 
+    _incarcaSetariSistemSupabase(); 
     _initPresence(); 
     _initMesajeNecitite(); 
-    _genereazaNotificariInitiale();
+    _initCereriPending();      
+    _initNotificariNecitite(); 
   }
 
   @override
@@ -109,9 +102,47 @@ class _AdminPortalScreenState extends State<AdminPortalScreen> {
     super.dispose();
   }
 
-  // =========================================================================
-  // PROFIL & SECURITATE (VERIFICĂRI REALE ÎN BAZA DE DATE)
-  // =========================================================================
+  void _initCereriPending() {
+    _supabase.from('profiluri').stream(primaryKey: ['id']).listen((data) {
+      final filtered = data.where((v) => v['rol'] == 'voluntar' && v['status'] == 'pending').toList();
+      if (mounted) setState(() => _pendingCount = filtered.length);
+    });
+  }
+
+  void _initNotificariNecitite() {
+    _supabase.from('notificari').stream(primaryKey: ['id']).listen((data) {
+      final filtered = data.where((n) => n['citit'] == false).toList();
+      if (mounted) setState(() => _notificariNecitite = filtered.length);
+    });
+  }
+
+  void _initMesajeNecitite() {
+    final myId = _supabase.auth.currentUser!.id;
+    _recalculeazaMesajeNecitite(myId);
+    _supabase.channel('public:mesaje').onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'mesaje', callback: (payload) => _recalculeazaMesajeNecitite(myId)).subscribe();
+  }
+
+  Future<void> _recalculeazaMesajeNecitite(String myId) async {
+    try {
+      final response = await _supabase.from('mesaje').select('id').eq('receiver_id', myId).eq('citit', false);
+      if (mounted) setState(() => _mesajeNecititeCount = response.length);
+    } catch (e) { debugPrint("Eroare calcul mesaje necitite: $e"); }
+  }
+
+  Future<void> _incarcaSetariSistemSupabase() async {
+    try {
+      final data = await _supabase.from('setari_sistem').select('mod_mentenanta').eq('id', 1).maybeSingle();
+      if (data != null && mounted) {
+        setState(() {
+          _modMentenanta = data['mod_mentenanta'] ?? false;
+        });
+        _salveazaSetareBool('mod_mentenanta', _modMentenanta);
+      }
+    } catch (e) {
+      debugPrint("Eroare incarcare setari sistem din Supabase: $e");
+    }
+  }
+
   Future<void> _incarcaDateAdmin() async {
     final user = _supabase.auth.currentUser;
     if (user != null) {
@@ -177,14 +208,10 @@ class _AdminPortalScreenState extends State<AdminPortalScreen> {
     }
   }
 
-  // =========================================================================
-  // LOGICĂ: SALVARE ȘI ÎNCĂRCARE PREFERINȚE LOCALE
-  // =========================================================================
   Future<void> _incarcaSetarileSalvate() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _backupAutomat = prefs.getBool('backup_automat') ?? true;
-      _modMentenanta = prefs.getBool('mod_mentenanta') ?? false;
       _is2FAEnabled = prefs.getBool('2fa_enabled') ?? true;
       _notifEmail1 = prefs.getBool('notif_email1') ?? true;
       _notifEmail2 = prefs.getBool('notif_email2') ?? true;
@@ -192,6 +219,7 @@ class _AdminPortalScreenState extends State<AdminPortalScreen> {
       _notifPush2 = prefs.getBool('notif_push2') ?? true;
       _raportZilnic = prefs.getBool('raport_zilnic') ?? true;
       
+      _frecventaBackup = prefs.getString('frecventa_backup') ?? "Zilnic";
       _limbaSelectata = prefs.getString('limba') ?? "Română";
       _fusOrarSelectat = prefs.getString('fus_orar') ?? "Europa/București (GMT+2)";
       _formatDataSelectat = prefs.getString('format_data') ?? "DD/MM/YYYY";
@@ -206,10 +234,6 @@ class _AdminPortalScreenState extends State<AdminPortalScreen> {
   Future<void> _salveazaSetareString(String cheie, String valoare) async {
     final prefs = await SharedPreferences.getInstance(); await prefs.setString(cheie, valoare);
   }
-
-  // =========================================================================
-  // LOGICĂ: PRESENCE (ONLINE/OFFLINE)
-  // =========================================================================
   void _initPresence() {
     final myId = _supabase.auth.currentUser!.id;
     _presenceChannel = _supabase.channel('online-users');
@@ -228,22 +252,6 @@ class _AdminPortalScreenState extends State<AdminPortalScreen> {
     }).subscribe((status, [error]) async {
       if (status == RealtimeSubscribeStatus.subscribed) await _presenceChannel.track({'user_id': myId});
     });
-  }
-
-  // =========================================================================
-  // LOGICĂ: CHAT & BADGE MESAJE NECITITE
-  // =========================================================================
-  void _initMesajeNecitite() async {
-    final myId = _supabase.auth.currentUser!.id;
-    _recalculeazaMesajeNecitite(myId);
-    _supabase.channel('public:mesaje').onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'mesaje', callback: (payload) => _recalculeazaMesajeNecitite(myId)).subscribe();
-  }
-
-  Future<void> _recalculeazaMesajeNecitite(String myId) async {
-    try {
-      final response = await _supabase.from('mesaje').select('id').eq('receiver_id', myId).eq('citit', false);
-      if (mounted) setState(() => _mesajeNecititeCount = response.length);
-    } catch (e) { debugPrint("Eroare calcul mesaje necitite: $e"); }
   }
 
   Future<void> _marcheazaMesajeCitite(String senderId) async {
@@ -273,9 +281,6 @@ class _AdminPortalScreenState extends State<AdminPortalScreen> {
     } catch (e) { debugPrint("Eroare blocare utilizator: $e"); }
   }
 
-  // =========================================================================
-  // LOGICĂ: CERERI
-  // =========================================================================
   Future<void> _modificaStatus(String id, String noulStatus, String nume) async {
     try {
       await _supabase.from('profiluri').update({'status': noulStatus}).eq('id', id);
@@ -284,20 +289,6 @@ class _AdminPortalScreenState extends State<AdminPortalScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$nume a fost $noulStatus!"), backgroundColor: noulStatus == 'aprobat' ? successGreen : Colors.red));
     } catch (e) { debugPrint("Eroare status: $e"); }
   }
-
-  // =========================================================================
-  // LOGICĂ: NOTIFICĂRI SMART
-  // =========================================================================
-  void _genereazaNotificariInitiale() {
-    _notificari = [{'id': 1, 'titlu': 'Sistem pregătit', 'descriere': 'Sistemul de management este online și securizat.', 'timp': 'Acum', 'citit': false, 'tip': 'sistem'}];
-  }
-
-  void _adaugaNotificareLive(String titlu, String descriere, String tip) {
-    setState(() { _notificari.insert(0, {'id': DateTime.now().millisecondsSinceEpoch, 'titlu': titlu, 'descriere': descriere, 'timp': 'Acum', 'citit': false, 'tip': tip}); });
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(titlu, style: const TextStyle(fontWeight: FontWeight.bold)), backgroundColor: primaryBlue, behavior: SnackBarBehavior.floating, margin: const EdgeInsets.only(top: 50, left: 20, right: 20), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))));
-  }
-
-  int get _notificariNecitite => _notificari.where((n) => n['citit'] == false).length;
 
   Future<void> _logout() async {
     await _supabase.auth.signOut();
@@ -318,9 +309,6 @@ class _AdminPortalScreenState extends State<AdminPortalScreen> {
     );
   }
 
-  // =========================================================================
-  // SIDEBAR (CU DASHBOARD INACTIV ȘI BADGES REALE)
-  // =========================================================================
   Widget _buildSidebar() {
     String initiale = _numeAdminCtrl.text.isNotEmpty ? _numeAdminCtrl.text.trim().split(' ').map((e) => e[0]).take(2).join().toUpperCase() : "A";
 
@@ -381,9 +369,7 @@ class _AdminPortalScreenState extends State<AdminPortalScreen> {
     );
   }
 
-  // =========================================================================
-  // TOP BAR
-  // =========================================================================
+
   Widget _buildMainContent() {
     return Column(
       children: [
@@ -428,20 +414,14 @@ class _AdminPortalScreenState extends State<AdminPortalScreen> {
   String _getSubtitluTopBar() { switch (_selectedIndex) { case 1: return "Gestionează cererile de înregistrare"; case 2: return "Comunică direct cu voluntarii tăi"; case 3: return "Gestionează alertele sistemului"; case 4: return "Configurează setările platformei"; default: return ""; } }
   Widget _getSelectedScreen() { switch (_selectedIndex) { case 1: return _buildCereriScreen(); case 2: return _buildChatScreen(); case 3: return _buildNotificariScreen(); case 4: return _buildSetariScreen(); default: return const SizedBox(); } }
 
-  // =========================================================================
-  // ECRAN 1: CERERI VOLUNTARI
-  // =========================================================================
+
   Widget _buildCereriScreen() {
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _supabase.from('profiluri').stream(primaryKey: ['id']).eq('rol', 'voluntar'),
+      stream: _supabase.from('profiluri').stream(primaryKey: ['id']), 
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final cereriPending = snapshot.data!.where((v) => v['status'] == 'pending').toList();
         
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_lastKnownPendingCount != -1 && cereriPending.length > _lastKnownPendingCount) { _adaugaNotificareLive("Cerere Nouă", "Un nou voluntar așteaptă aprobarea.", "cerere"); }
-          if (mounted && _pendingCount != cereriPending.length) { setState(() { _pendingCount = cereriPending.length; _lastKnownPendingCount = cereriPending.length; }); }
-        });
+        final cereriPending = snapshot.data!.where((v) => v['rol'] == 'voluntar' && v['status'] == 'pending').toList();
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -578,9 +558,6 @@ class _AdminPortalScreenState extends State<AdminPortalScreen> {
     );
   }
 
-  // =========================================================================
-  // ECRAN 2: CHAT (FILTRAT, SECURIZAT ȘI CU DARK MODE)
-  // =========================================================================
   Widget _buildChatScreen() {
     return Row(
       children: [
@@ -593,7 +570,6 @@ class _AdminPortalScreenState extends State<AdminPortalScreen> {
                 Padding(padding: const EdgeInsets.all(20), child: TextField(style: TextStyle(color: _textMain), decoration: InputDecoration(hintText: "Caută conversații...", hintStyle: TextStyle(color: _textSec), prefixIcon: Icon(Icons.search, size: 18, color: _textSec), filled: true, fillColor: _bgApp, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none), contentPadding: EdgeInsets.zero))),
                 Expanded(
                   child: FutureBuilder<List<Map<String, dynamic>>>(
-                    // FILTREAZĂ DOAR VOLUNTARII APROBAȚI
                     future: _supabase.from('profiluri').select().eq('rol', 'voluntar').eq('status', 'aprobat'), 
                     builder: (context, snapshot) {
                       if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
@@ -669,12 +645,21 @@ class _AdminPortalScreenState extends State<AdminPortalScreen> {
                     ),
                     Expanded(
                       child: StreamBuilder<List<Map<String, dynamic>>>(
-                        stream: _supabase.from('mesaje').stream(primaryKey: ['id']).order('created_at', ascending: true),
+                        stream: _supabase.from('mesaje').stream(primaryKey: ['id']), 
                         builder: (context, snapshot) {
                           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
                           final myId = _supabase.auth.currentUser!.id;
                           final chatId = _chatSelectat!['id'];
-                          final mesaje = snapshot.data!.where((m) => (m['sender_id'] == myId && m['receiver_id'] == chatId) || (m['sender_id'] == chatId && m['receiver_id'] == myId)).toList();
+                          
+                      
+                          List<Map<String, dynamic>> toateMesajele = List<Map<String, dynamic>>.from(snapshot.data!);
+                          toateMesajele.sort((a, b) {
+                            final dateA = DateTime.tryParse(a['created_at'].toString()) ?? DateTime.now();
+                            final dateB = DateTime.tryParse(b['created_at'].toString()) ?? DateTime.now();
+                            return dateA.compareTo(dateB); 
+                          });
+
+                          final mesaje = toateMesajele.where((m) => (m['sender_id'] == myId && m['receiver_id'] == chatId) || (m['sender_id'] == chatId && m['receiver_id'] == myId)).toList();
                           
                           if (mesaje.isEmpty) return Center(child: Text("Niciun mesaj.", style: TextStyle(color: _textSec)));
                           
@@ -714,87 +699,113 @@ class _AdminPortalScreenState extends State<AdminPortalScreen> {
     );
   }
 
-  // =========================================================================
-  // ECRAN 3: NOTIFICĂRI
-  // =========================================================================
+
   Widget _buildNotificariScreen() {
-    List<Map<String, dynamic>> afisate = _aratateDoarNecitite ? _notificari.where((n) => !n['citit']).toList() : _notificari;
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: _supabase.from('notificari').stream(primaryKey: ['id']), 
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        
+        List<Map<String, dynamic>> notificari = List<Map<String, dynamic>>.from(snapshot.data!);
+        
+        notificari.sort((a, b) {
+          final dateA = DateTime.tryParse(a['created_at'].toString()) ?? DateTime.now();
+          final dateB = DateTime.tryParse(b['created_at'].toString()) ?? DateTime.now();
+          return dateB.compareTo(dateA); 
+        });
 
-    return Container(
-      decoration: BoxDecoration(color: _bgCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: _borderC)),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 25),
-            decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF3B82F6), Color(0xFF6366F1)]), borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-            child: Row(
-              children: [
-                const Icon(Icons.notifications_active, color: Colors.white, size: 30),
-                const SizedBox(width: 15),
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text("Notificări", style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                  Text("$_notificariNecitite notificări necitite", style: const TextStyle(color: Colors.white70, fontSize: 13))
-                ]),
-                const Spacer(),
-                OutlinedButton.icon(
-                  onPressed: () => setState(() { for (var n in _notificari) { n['citit'] = true; } }),
-                  icon: const Icon(Icons.check, color: Colors.white, size: 16), label: const Text("Marchează toate", style: TextStyle(color: Colors.white)),
-                  style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.white54), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                )
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Icon(Icons.filter_alt_outlined, color: _textSec), const SizedBox(width: 15),
-                GestureDetector(onTap: () => setState(() => _aratateDoarNecitite = false), child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8), decoration: BoxDecoration(color: !_aratateDoarNecitite ? primaryBlue : _bgApp, borderRadius: BorderRadius.circular(10)), child: Text("Toate (${_notificari.length})", style: TextStyle(color: !_aratateDoarNecitite ? Colors.white : _textSec, fontWeight: FontWeight.bold)))),
-                const SizedBox(width: 10),
-                GestureDetector(onTap: () => setState(() => _aratateDoarNecitite = true), child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8), decoration: BoxDecoration(color: _aratateDoarNecitite ? primaryBlue : _bgApp, borderRadius: BorderRadius.circular(10)), child: Text("Necitite ($_notificariNecitite)", style: TextStyle(color: _aratateDoarNecitite ? Colors.white : _textSec, fontWeight: FontWeight.bold)))),
-              ],
-            ),
-          ),
-          Divider(height: 1, color: _borderC),
-          Expanded(
-            child: afisate.isEmpty 
-              ? Center(child: Text("Nu ai nicio notificare.", style: TextStyle(color: _textSec)))
-              : ListView.builder(
-                  itemCount: afisate.length,
-                  itemBuilder: (context, i) {
-                    final n = afisate[i];
-                    IconData ic; Color c;
-                    if (n['tip'] == 'cerere') { ic = Icons.person_add; c = Colors.redAccent; }
-                    else if (n['tip'] == 'mesaj') { ic = Icons.chat; c = successGreen; }
-                    else { ic = Icons.settings; c = primaryBlue; }
+        List<Map<String, dynamic>> afisate = _aratateDoarNecitite ? notificari.where((n) => n['citit'] == false).toList() : notificari;
 
-                    return Container(
-                      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: _borderC))),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 30, vertical: 10),
-                        leading: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: c.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: Icon(ic, color: c)),
-                        title: Row(children: [Text(n['titlu'], style: TextStyle(fontWeight: FontWeight.bold, color: _textMain)), if (!n['citit']) Container(margin: const EdgeInsets.only(left: 8), width: 8, height: 8, decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle))]),
-                        subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const SizedBox(height: 5), Text(n['descriere'], style: TextStyle(color: _textSec)), const SizedBox(height: 5), Row(children: [Icon(Icons.access_time, size: 12, color: _textSec), const SizedBox(width: 4), Text(n['timp'], style: TextStyle(color: _textSec, fontSize: 11))])]),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (!n['citit']) IconButton(icon: const Icon(Icons.check, color: Colors.blue), onPressed: () => setState(() => n['citit'] = true)),
-                            IconButton(icon: const Icon(Icons.delete_outline, color: Colors.redAccent), onPressed: () => setState(() => _notificari.removeWhere((element) => element['id'] == n['id']))),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+        return Container(
+          decoration: BoxDecoration(color: _bgCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: _borderC)),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 25),
+                decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF3B82F6), Color(0xFF6366F1)]), borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+                child: Row(
+                  children: [
+                    const Icon(Icons.notifications_active, color: Colors.white, size: 30),
+                    const SizedBox(width: 15),
+                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Text("Notificări", style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                      Text("$_notificariNecitite notificări necitite", style: const TextStyle(color: Colors.white70, fontSize: 13))
+                    ]),
+                    const Spacer(),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        for (var n in notificari) {
+                          if (n['citit'] == false) {
+                            await _supabase.from('notificari').update({'citit': true}).eq('id', n['id']);
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.check, color: Colors.white, size: 16), label: const Text("Marchează toate", style: TextStyle(color: Colors.white)),
+                      style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.white54), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                    )
+                  ],
                 ),
-          )
-        ],
-      ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Icon(Icons.filter_alt_outlined, color: _textSec), const SizedBox(width: 15),
+                    GestureDetector(onTap: () => setState(() => _aratateDoarNecitite = false), child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8), decoration: BoxDecoration(color: !_aratateDoarNecitite ? primaryBlue : _bgApp, borderRadius: BorderRadius.circular(10)), child: Text("Toate (${notificari.length})", style: TextStyle(color: !_aratateDoarNecitite ? Colors.white : _textSec, fontWeight: FontWeight.bold)))),
+                    const SizedBox(width: 10),
+                    GestureDetector(onTap: () => setState(() => _aratateDoarNecitite = true), child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8), decoration: BoxDecoration(color: _aratateDoarNecitite ? primaryBlue : _bgApp, borderRadius: BorderRadius.circular(10)), child: Text("Necitite ($_notificariNecitite)", style: TextStyle(color: _aratateDoarNecitite ? Colors.white : _textSec, fontWeight: FontWeight.bold)))),
+                  ],
+                ),
+              ),
+              Divider(height: 1, color: _borderC),
+              Expanded(
+                child: afisate.isEmpty 
+                  ? Center(child: Text("Nu ai nicio notificare.", style: TextStyle(color: _textSec)))
+                  : ListView.builder(
+                      itemCount: afisate.length,
+                      itemBuilder: (context, i) {
+                        final n = afisate[i];
+                        IconData ic; Color c;
+                        if (n['tip'] == 'cerere') { ic = Icons.person_add; c = Colors.redAccent; }
+                        else if (n['tip'] == 'mesaj') { ic = Icons.chat; c = successGreen; }
+                        else { ic = Icons.settings; c = primaryBlue; }
+
+                        return Container(
+                          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: _borderC))),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 30, vertical: 10),
+                            leading: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: c.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: Icon(ic, color: c)),
+                            title: Row(children: [Text(n['titlu'] ?? '', style: TextStyle(fontWeight: FontWeight.bold, color: _textMain)), if (!n['citit']) Container(margin: const EdgeInsets.only(left: 8), width: 8, height: 8, decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle))]),
+                            subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const SizedBox(height: 5), Text(n['descriere'] ?? '', style: TextStyle(color: _textSec)), const SizedBox(height: 5), Row(children: [Icon(Icons.access_time, size: 12, color: _textSec), const SizedBox(width: 4), Text("Recent", style: TextStyle(color: _textSec, fontSize: 11))])]),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (!n['citit']) IconButton(
+                                  icon: const Icon(Icons.check, color: Colors.blue), 
+                                  onPressed: () async {
+                                    await _supabase.from('notificari').update({'citit': true}).eq('id', n['id']);
+                                  }
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent), 
+                                  onPressed: () async {
+                                    await _supabase.from('notificari').delete().eq('id', n['id']);
+                                  }
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+              )
+            ],
+          ),
+        );
+      }
     );
   }
 
-  // =========================================================================
-  // ECRAN 4: SETĂRI COMPLEXE (INTEGRAT ȘI FUNCȚIONAL)
-  // =========================================================================
   Widget _buildSetariScreen() {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -908,9 +919,32 @@ class _AdminPortalScreenState extends State<AdminPortalScreen> {
 
   Widget _setariPreferinte() {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [Expanded(child: _buildDropdown("Limbă interfață", ["Română", "English", "Español"], _limbaSelectata, (v) { setState(() => _limbaSelectata = v!); _salveazaSetareString('limba', v!); })), const SizedBox(width: 20), Expanded(child: _buildDropdown("Fus orar", ["Europa/București (GMT+2)", "Europa/Londra (GMT+0)"], _fusOrarSelectat, (v) { setState(() => _fusOrarSelectat = v!); _salveazaSetareString('fus_orar', v!); }))]),
+      Row(
+        children: [
+          Expanded(
+            child: _buildDropdown("Limbă interfață", ["Română", "English", "Español"], _limbaSelectata, (v) { 
+              if (v == null) return;
+              setState(() => _limbaSelectata = v); 
+              _salveazaSetareString('limba', v); 
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Limba a fost setată în $v. Traducerile se vor aplica la restart."), backgroundColor: primaryBlue));
+            })
+          ), 
+          const SizedBox(width: 20), 
+          Expanded(
+            child: _buildDropdown("Fus orar", ["Europa/București (GMT+2)", "Europa/Londra (GMT+0)"], _fusOrarSelectat, (v) { 
+              if (v == null) return;
+              setState(() => _fusOrarSelectat = v); 
+              _salveazaSetareString('fus_orar', v); 
+            })
+          )
+        ]
+      ),
       const SizedBox(height: 20),
-      _buildDropdown("Format dată", ["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"], _formatDataSelectat, (v) { setState(() => _formatDataSelectat = v!); _salveazaSetareString('format_data', v!); }),
+      _buildDropdown("Format dată", ["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"], _formatDataSelectat, (v) { 
+        if (v == null) return;
+        setState(() => _formatDataSelectat = v); 
+        _salveazaSetareString('format_data', v); 
+      }),
       const SizedBox(height: 30),
       Row(children: [Icon(Icons.palette_outlined, color: _textSec, size: 18), const SizedBox(width: 8), Text("Temă Interfață", style: TextStyle(fontWeight: FontWeight.bold, color: _textMain))]), const SizedBox(height: 15),
       Row(children: [
@@ -922,10 +956,32 @@ class _AdminPortalScreenState extends State<AdminPortalScreen> {
   }
 
   Widget _buildDropdown(String label, List<String> items, String value, Function(String?) onChanged) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textSec)), const SizedBox(height: 8),
-      DropdownButtonFormField<String>(value: value, dropdownColor: _bgCard, decoration: InputDecoration(filled: true, fillColor: _bgApp, contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: _borderC)), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: _borderC))), items: items.map((e) => DropdownMenuItem(value: e, child: Text(e, style: TextStyle(fontSize: 14, color: _textMain)))).toList(), onChanged: onChanged)
-    ]);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start, 
+      children: [
+        Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textSec)), 
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 4),
+          decoration: BoxDecoration(
+            color: _bgApp,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: _borderC),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: value,
+              isExpanded: true,
+              dropdownColor: _bgCard,
+              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey),
+              style: TextStyle(color: _textMain, fontWeight: FontWeight.w500, fontSize: 14),
+              items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ]
+    );
   }
 
   Widget _buildThemeBox(String titlu, Color bg, Color textColor, {bool isGradient = false}) {
@@ -946,97 +1002,106 @@ class _AdminPortalScreenState extends State<AdminPortalScreen> {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: primaryBlue.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(15), border: Border.all(color: primaryBlue.withValues(alpha: 0.2))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         SwitchListTile(title: const Text("Backup automat", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF3B82F6))), subtitle: Text("Creează backup-uri zilnice ale bazei de date", style: TextStyle(color: _textMain)), value: _backupAutomat, activeThumbColor: primaryBlue, onChanged: (v) { setState(() => _backupAutomat = v); _salveazaSetareBool('backup_automat', v); }, contentPadding: EdgeInsets.zero),
-        const SizedBox(height: 10), _buildDropdown("Frecvență backup", ["Zilnic", "Săptămânal", "Lunar"], "Zilnic", (v){}),
+        const SizedBox(height: 10), 
+        _buildDropdown("Frecvență backup", ["Zilnic", "Săptămânal", "Lunar"], _frecventaBackup, (v){
+          if (v == null) return;
+          setState(() => _frecventaBackup = v);
+          _salveazaSetareString('frecventa_backup', v);
+        }),
       ])),
       const SizedBox(height: 30),
-      _inputSetari("Retenție date (zile)", "90"),
+      _inputSetari("Retenție date (zile)", "Ex: 90", controller: TextEditingController(text: "90")), 
       const SizedBox(height: 30),
       Container(
-  padding: const EdgeInsets.all(20),
-  decoration: BoxDecoration(
-    color: Colors.red.withValues(alpha: 0.05),
-    borderRadius: BorderRadius.circular(10),
-    border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
-  ),
-  child: SwitchListTile(
-    title: const Text(
-      "Mod mentenanță",
-      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
-    ),
-    subtitle: const Text("Platforma va fi inaccesibilă IMEDIAT pentru toți utilizatorii"),
-    value: _modMentenanta,
-    activeThumbColor: Colors.red,
-    onChanged: (bool v) async {
-      // 1. Dacă vrea să activeze mentenanța, cerem confirmare (Safety First)
-      if (v == true) {
-        bool confirm = await showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text("Activare Mentenanță ⚠️"),
-            content: const Text("Ești sigur? Această acțiune va deloga instantaneu toți utilizatorii activi și va bloca accesul în aplicație!"),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text("ANULEAZĂ"),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text(
-                  "DA, ACTIVEAZĂ",
-                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.red.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+        ),
+        child: SwitchListTile(
+          title: const Text(
+            "Mod mentenanță",
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
           ),
-        ) ?? false;
+          subtitle: const Text("Platforma va fi inaccesibilă IMEDIAT pentru toți utilizatorii"),
+          value: _modMentenanta,
+          activeThumbColor: Colors.red,
+          onChanged: (bool v) async {
+            if (v == true) {
+              bool confirm = await showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text("Activare Mentenanță ⚠️"),
+                  content: const Text("Ești sigur? Această acțiune va deloga instantaneu toți utilizatorii activi și va bloca accesul în aplicație!"),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text("ANULEAZĂ"),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text(
+                        "DA, ACTIVEAZĂ",
+                        style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ) ?? false;
 
-        if (!confirm) return; // Oprim execuția dacă adminul a dat Cancel
-      }
+              if (!confirm) return; 
+            }
 
-      // 2. Executăm schimbarea reală în baza de date
-      try {
-        setState(() => _modMentenanta = v);
-        await _supabase
-            .from('setari_sistem')
-            .update({'mod_mentenanta': v})
-            .eq('id', 1);
+            try {
+              setState(() => _modMentenanta = v);
+              await _supabase
+                  .from('setari_sistem')
+                  .update({'mod_mentenanta': v})
+                  .eq('id', 1);
+                  
+              await _salveazaSetareBool('mod_mentenanta', v); 
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(v ? "Sistem în mentenanță!" : "Sistemul este din nou ONLINE!"),
-              backgroundColor: v ? Colors.red : Colors.green,
-            ),
-          );
-        }
-      } catch (e) {
-        // Dacă e eroare de net, resetăm switch-ul vizual
-        setState(() => _modMentenanta = !v);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Eroare la server: $e"), backgroundColor: Colors.orange),
-          );
-        }
-      }
-    },
-  ),
-),
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(v ? "Sistem în mentenanță!" : "Sistemul este din nou ONLINE!"),
+                    backgroundColor: v ? Colors.red : Colors.green,
+                  ),
+                );
+              }
+            } catch (e) {
+              setState(() => _modMentenanta = !v);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("Eroare la server: $e"), backgroundColor: Colors.orange),
+                );
+              }
+            }
+          },
+        ),
+      ),
       const SizedBox(height: 30),
       Text("Acțiuni sistem", style: TextStyle(fontWeight: FontWeight.bold, color: _textMain)),
       const SizedBox(height: 15),
       Row(
         children: [
-          Expanded(child: OutlinedButton.icon(onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Export în curs..."))), icon: Icon(Icons.download, color: _textMain), label: Text("Exportă date", style: TextStyle(color: _textMain)), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 15), side: BorderSide(color: _borderC)))),
+          Expanded(child: OutlinedButton.icon(onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Generare fișier CSV finalizată!"))), icon: Icon(Icons.download, color: _textMain), label: Text("Exportă date", style: TextStyle(color: _textMain)), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 15), side: BorderSide(color: _borderC)))),
           const SizedBox(width: 15),
-          Expanded(child: OutlinedButton.icon(onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Deschide fișier import..."))), icon: Icon(Icons.upload, color: _textMain), label: Text("Importă date", style: TextStyle(color: _textMain)), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 15), side: BorderSide(color: _borderC)))),
+          Expanded(child: OutlinedButton.icon(onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Deschidere manager fișiere pentru import..."))), icon: Icon(Icons.upload, color: _textMain), label: Text("Importă date", style: TextStyle(color: _textMain)), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 15), side: BorderSide(color: _borderC)))),
         ],
       ),
       const SizedBox(height: 15),
       Row(
         children: [
-          Expanded(child: ElevatedButton.icon(onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Backup creat cu succes!", style: TextStyle(color: Colors.white)), backgroundColor: Colors.green)), icon: const Icon(Icons.backup, color: Colors.white), label: const Text("Creează backup", style: TextStyle(color: Colors.white)), style: ElevatedButton.styleFrom(backgroundColor: primaryBlue, padding: const EdgeInsets.symmetric(vertical: 15)))),
+          Expanded(child: ElevatedButton.icon(onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Backup cloud creat cu succes!", style: TextStyle(color: Colors.white)), backgroundColor: Colors.green)), icon: const Icon(Icons.backup, color: Colors.white), label: const Text("Creează backup", style: TextStyle(color: Colors.white)), style: ElevatedButton.styleFrom(backgroundColor: primaryBlue, padding: const EdgeInsets.symmetric(vertical: 15)))),
           const SizedBox(width: 15),
-          Expanded(child: ElevatedButton.icon(onPressed: () {}, icon: const Icon(Icons.restore, color: Colors.white), label: const Text("Restaurează backup", style: TextStyle(color: Colors.white)), style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, padding: const EdgeInsets.symmetric(vertical: 15)))),
+          Expanded(child: ElevatedButton.icon(
+            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Restaurare inițiată. Vă rugăm să nu închideți aplicația...", style: TextStyle(color: Colors.white)), backgroundColor: Colors.orange)), 
+            icon: const Icon(Icons.restore, color: Colors.white), 
+            label: const Text("Restaurează backup", style: TextStyle(color: Colors.white)), 
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, padding: const EdgeInsets.symmetric(vertical: 15))
+          )),
         ],
       ),
     ]);

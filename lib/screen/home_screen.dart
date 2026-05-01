@@ -10,11 +10,10 @@ import 'profile_screen.dart';
 import 'community_screen.dart'; 
 import 'appointments_screen.dart';
 import 'booking_screen.dart';
-import 'dictionary_screen.dart'; // Importul necesar pentru Dicționar
+import 'dictionary_screen.dart'; 
+import 'favorite_volunteers_screen.dart'; 
 
-// --------------------------------------------------------
-// ECRANUL PRINCIPAL (HARTĂ LIVE ZENLY/SNAPCHAT STYLE)
-// --------------------------------------------------------
+
 class HomeScreen extends StatefulWidget {
   final String numeUtilizator;
   final String rol; 
@@ -34,16 +33,19 @@ class _HomeScreenState extends State<HomeScreen> {
   final MapController _mapController = MapController();
   final _supabase = Supabase.instance.client;
   
-  // Date utilizator sincronizate live direct din Supabase
   late String _numeAfisat;
   late String _prenumeAfisat; 
   String _pozaProfilMea = '';
   String _timestampPoza = ''; 
   int _xp = 0;
+  
   bool _esteVizibilPeHarta = true; 
-  bool _isOnline = true; // Starea de Disponibilitate (Online/Offline)
+  bool _isOnline = true; 
+  bool? _oldVizibil; 
 
-  // Locația reală și Stream-urile
+  List<String> _voluntariPreferatiIds = [];
+  StreamSubscription<List<Map<String, dynamic>>>? _favoritesStream;
+
   LatLng _myLocation = const LatLng(44.4268, 26.1025);
   bool _locatieGasita = false;
   StreamSubscription<Position>? _positionStream;
@@ -59,16 +61,50 @@ class _HomeScreenState extends State<HomeScreen> {
     _ascultaProfilulMeuLive(); 
     _startLiveLocation(); 
     _verificaModMentenanta();
+
+    if (widget.rol != 'voluntar') {
+      _ascultaFavoriteLive(); 
+    }
   }
 
   @override
   void dispose() {
     _positionStream?.cancel(); 
     _myProfileStream?.cancel(); 
+    _favoritesStream?.cancel();
     super.dispose();
   }
 
-  // --- 0. SINCRONIZARE LIVE A PROPRIULUI PROFIL ---
+
+  void _ascultaFavoriteLive() {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+
+    _favoritesStream = _supabase
+        .from('voluntari_preferati')
+        .stream(primaryKey: ['id'])
+        .eq('user_id', user.id)
+        .listen((data) {
+      if (mounted) {
+        setState(() {
+          _voluntariPreferatiIds = data.map((e) => e['voluntar_id'].toString()).toList();
+        });
+      }
+    });
+  }
+
+  Future<void> _forcePushLocation() async {
+    if (!_locatieGasita || widget.rol != 'voluntar') return;
+    try {
+      await _supabase.from('profiluri').update({
+        'lat': _myLocation.latitude,
+        'lng': _myLocation.longitude,
+      }).eq('id', _supabase.auth.currentUser!.id);
+    } catch (e) {
+      debugPrint("Eroare la forțarea locației: $e");
+    }
+  }
+
   void _ascultaProfilulMeuLive() {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
@@ -83,10 +119,15 @@ class _HomeScreenState extends State<HomeScreen> {
         if (mounted) {
           setState(() {
             _xp = profil['xp'] ?? 0;
-            _esteVizibilPeHarta = profil['vizibil_harta'] ?? true;
             _isOnline = profil['is_online'] ?? true;
             
-            // Verificăm dacă s-a schimbat poza pentru a face update la Cache Buster
+            bool nouVizibil = profil['vizibil_harta'] ?? true;
+            if (_oldVizibil != null && _oldVizibil == false && nouVizibil == true) {
+              _forcePushLocation();
+            }
+            _oldVizibil = nouVizibil;
+            _esteVizibilPeHarta = nouVizibil;
+            
             String pozaNoua = profil['poza_profil'] ?? '';
             if (_pozaProfilMea != pozaNoua) {
               _timestampPoza = DateTime.now().millisecondsSinceEpoch.toString();
@@ -105,7 +146,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // --- ALGORITM CALCUL NIVEL & EXPERIENȚĂ ---
   Map<String, dynamic> _calculeazaNivel(int xp) {
     if (xp < 100) return {'nivel': 1, 'titlu': 'Voluntar Începător 🌱', 'procent': xp / 100};
     if (xp < 300) return {'nivel': 2, 'titlu': 'Ajutor de Nădejde 🤝', 'procent': (xp - 100) / 200};
@@ -115,7 +155,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return {'nivel': 6, 'titlu': 'Legendă a Comunității 👑', 'procent': 1.0}; 
   }
 
-  // --- 1. LOCALIZARE GPS LIVE ---
   void _startLiveLocation() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return;
@@ -136,7 +175,6 @@ class _HomeScreenState extends State<HomeScreen> {
           _locatieGasita = true;
         });
 
-        // Transmitem locația doar dacă voluntarul e și online, și vizibil
         if (widget.rol == 'voluntar' && _esteVizibilPeHarta && _isOnline) {
           try {
             await _supabase.from('profiluri').update({
@@ -144,14 +182,13 @@ class _HomeScreenState extends State<HomeScreen> {
               'lng': position.longitude,
             }).eq('id', _supabase.auth.currentUser!.id);
           } catch (e) {
-            // Ignorăm erorile în fundal
+            // Silențios în background
           }
         }
       }
     });
   }
 
-  // --- 2. SISTEM DE SECURITATE MENTENANȚĂ ---
   void _verificaModMentenanta() {
     if (widget.rol != 'admin') {
       _supabase.from('setari_sistem').stream(primaryKey: ['id']).eq('id', 1).listen((data) {
@@ -165,7 +202,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // --- 3. ACȚIUNE VOLUNTAR: ACCEPTĂ CEREREA ---
   Future<void> _acceptaUrgenta(String cerereId) async {
     try {
       await _supabase.from('programari').update({
@@ -183,7 +219,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // --- 4. POP-UP CERERE DE URGENȚĂ ---
   void _arataDetaliiUrgenta(Map<String, dynamic> urgenta) {
     final lat = double.parse(urgenta['lat'].toString());
     final lng = double.parse(urgenta['lng'].toString());
@@ -249,42 +284,105 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- 5. POP-UP PROFIL VOLUNTAR PE HARTĂ ---
   void _arataProfilVoluntar(Map<String, dynamic> voluntar) {
+    String voluntarId = voluntar['id'].toString();
     String nume = "${voluntar['prenume']} ${voluntar['nume']}";
     int xpVoluntar = voluntar['xp'] ?? 0;
     String pozaUrl = voluntar['poza_profil'] ?? '';
     Map<String, dynamic> nivelVoluntar = _calculeazaNivel(xpVoluntar);
 
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        height: 260,
-        child: Column(
-          children: [
-            CircleAvatar(
-              radius: 40,
-              backgroundColor: Colors.teal.shade100,
-              backgroundImage: pozaUrl.isNotEmpty ? NetworkImage(pozaUrl) : null,
-              child: pozaUrl.isEmpty ? Text(nume.isNotEmpty ? nume[0].toUpperCase() : '?', style: const TextStyle(fontSize: 30, color: Colors.teal, fontWeight: FontWeight.bold)) : null,
-            ),
-            const SizedBox(height: 15),
-            Text(nume, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 5),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+      builder: (context) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setModalState) {
+          bool isFavorite = _voluntariPreferatiIds.contains(voluntarId);
+
+          return Container(
+            padding: const EdgeInsets.all(24),
+            height: 300,
+            child: Column(
               children: [
-                const Icon(Icons.star, color: Colors.amber, size: 20),
-                const SizedBox(width: 5),
-                Text("${nivelVoluntar['titlu']} (Nivel ${nivelVoluntar['nivel']})", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(width: 48), 
+                    CircleAvatar(
+                      radius: 45,
+                      backgroundColor: Colors.teal.shade50,
+                      backgroundImage: pozaUrl.isNotEmpty ? NetworkImage(pozaUrl) : null,
+                      child: pozaUrl.isEmpty ? Text(nume.isNotEmpty ? nume[0].toUpperCase() : '?', style: const TextStyle(fontSize: 35, color: Colors.teal, fontWeight: FontWeight.bold)) : null,
+                    ),
+                    IconButton(
+                      icon: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+                        child: Icon(
+                          isFavorite ? Icons.favorite : Icons.favorite_border_rounded,
+                          key: ValueKey(isFavorite),
+                          color: isFavorite ? Colors.redAccent : Colors.grey.shade400,
+                          size: 32,
+                        ),
+                      ),
+                      onPressed: () async {
+                        try {
+                          final user = _supabase.auth.currentUser;
+                          if (user == null) return;
+
+                         
+                          setModalState(() => isFavorite = !isFavorite);
+
+                          if (isFavorite) {
+                            await _supabase.from('voluntari_preferati').insert({
+                              'user_id': user.id,
+                              'voluntar_id': voluntarId,
+                            });
+                          } else {
+                            await _supabase.from('voluntari_preferati')
+                                .delete()
+                                .eq('user_id', user.id)
+                                .eq('voluntar_id', voluntarId);
+                          }
+                        } catch (e) {
+                        
+                          setModalState(() => isFavorite = !isFavorite);
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Eroare la salvare."), backgroundColor: Colors.red));
+                        }
+                      },
+                    )
+                  ],
+                ),
+                const SizedBox(height: 15),
+                Text(nume, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 5),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.star, color: Colors.amber, size: 20),
+                    const SizedBox(width: 5),
+                    Text("${nivelVoluntar['titlu']} (Nivel ${nivelVoluntar['nivel']})", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey)),
+                  ],
+                ),
+                const Spacer(),
+                SizedBox(
+                  width: double.infinity,
+                  height: 45,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                       Navigator.pop(context);
+                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Deschidere chat direct...")));
+                    },
+                    icon: const Icon(Icons.chat_bubble_rounded, color: Colors.white, size: 18),
+                    label: const Text("TRIMITE MESAJ", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3B82F6), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  ),
+                )
               ],
             ),
-            const Spacer(),
-            const Text("Acesta este un voluntar activ în zona ta. Cere ajutor pentru a-l notifica!", style: TextStyle(color: Colors.grey, fontSize: 12), textAlign: TextAlign.center,)
-          ],
-        ),
+          );
+        }
       ),
     );
   }
@@ -351,7 +449,7 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 TileLayer(urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', subdomains: const ['a', 'b', 'c', 'd'], userAgentPackageName: 'com.signlanguagehero.app'),
                 
-                // STRATUL 1: LOCAȚIA MEA CURENTĂ 
+              
                 MarkerLayer(markers: [
                   Marker(
                     point: _myLocation, 
@@ -361,7 +459,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   )
                 ]),
 
-                // STRATUL 2: URGENȚELE (VĂZUTE DE VOLUNTAR)
+             
                 if (isVoluntar)
                   StreamBuilder<List<Map<String, dynamic>>>(
                     stream: _supabase.from('programari').stream(primaryKey: ['id']).eq('status', 'în așteptare'),
@@ -384,7 +482,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     },
                   ),
 
-                // STRATUL 3: VOLUNTARII ACTIVI (VĂZUȚI DE BENEFICIAR)
+               
                 if (!isVoluntar)
                   StreamBuilder<List<Map<String, dynamic>>>(
                     stream: _supabase.from('profiluri').stream(primaryKey: ['id']).eq('rol', 'voluntar'),
@@ -420,13 +518,13 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Buton de centrare hartă
+       
           Positioned(
             bottom: 110, right: 20,
             child: FloatingActionButton(backgroundColor: Colors.white, elevation: 4, onPressed: () => _mapController.move(_myLocation, 14.5), child: const Icon(Icons.my_location_rounded, color: Color(0xFF1E88E5))),
           ),
 
-          // SLEEK ACTION BAR (Înlocuiește butoanele vechi)
+       
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
@@ -453,6 +551,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             onChanged: (val) async {
                               setState(() => _isOnline = val);
                               await _supabase.from('profiluri').update({'is_online': val}).eq('id', _supabase.auth.currentUser!.id);
+                              if (val) _forcePushLocation();
                             },
                           ),
                         ],
@@ -472,7 +571,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- UI: Pinul Roșu de Urgență ---
   Widget _buildRedEmergencyMarker() {
     return Column(
       children: [
@@ -491,7 +589,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- UI: Pin Stil Snapchat / Zenly ---
   Widget _buildSnapchatStyleMarker(String nume, String? pozaUrl, {bool isMe = false}) {
     String finalUrl = pozaUrl ?? '';
     if (isMe && finalUrl.isNotEmpty) {
@@ -547,9 +644,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // =========================================================================
-  // MENIUL LATERAL (DRAWER)
-  // =========================================================================
   Widget _buildDrawerMenu(bool isVoluntar, Map<String, dynamic> nivelData) {
     Color themeColor = isVoluntar ? const Color(0xFF00796B) : const Color(0xFF1E88E5);
 
@@ -607,6 +701,19 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 _buildMenuItem(Icons.map_rounded, isVoluntar ? "Radar Intervenții" : "Harta Urgențelor", "Statusul live al zonei", themeColor, () => Navigator.pop(context)),
                 
+               
+                if (!isVoluntar)
+                  ListTile(
+                    leading: const Icon(Icons.favorite, color: Colors.redAccent, size: 28),
+                    title: const Text("Voluntarii Mei", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    subtitle: const Text("Contactează-i direct pe cei salvați"),
+                    trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                    onTap: () {
+                      Navigator.pop(context); 
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const FavoriteVolunteersScreen()));
+                    },
+                  ),
+
                 _buildMenuItem(Icons.calendar_month_rounded, "Programări", "Calendar și solicitări", themeColor, () {
                   Navigator.pop(context); 
                   Navigator.push(context, MaterialPageRoute(builder: (context) => AppointmentsScreen(rol: widget.rol)));

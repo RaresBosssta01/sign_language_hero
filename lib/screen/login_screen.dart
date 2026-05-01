@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'register_screen.dart';
 import 'home_screen.dart';
 import 'admin_portal_screen.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,20 +21,17 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   bool _isPasswordVisible = false;
   bool _isLoading = false; 
 
-  // Două controllere de animație pentru efecte independente și organice
   late AnimationController _handsAnimController;
   late AnimationController _logoAnimController;
 
   @override
   void initState() {
     super.initState();
-    // Animația pentru mâinile care plutesc (Lent și fluid)
     _handsAnimController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 4),
     )..repeat(reverse: true);
 
-    // Animația pentru Logo-ul care pulsează ("Breathing effect")
     _logoAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -60,7 +58,6 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     );
   }
 
-  // --- LOGICA DE LOGIN SUPABASE (SECURIZATĂ) ---
   Future<void> _loginBackend() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -162,28 +159,23 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         child: SafeArea(
           child: Stack(
             children: [
-              // --- MÂINILE ANIMATE DIN FUNDAL ---
-              // Folosim Align cu fracțiuni ca să arate perfect pe orice ecran
-              _buildAnimatedHand('👋', const Alignment(-0.8, -0.7), 0.0, -0.2), // Stânga Sus
-              _buildAnimatedHand('🤟', const Alignment(0.8, -0.6), 0.4, 0.2),  // Dreapta Sus
-              _buildAnimatedHand('✋', const Alignment(-0.85, 0.7), 0.7, -0.1), // Stânga Jos
-              _buildAnimatedHand('👏', const Alignment(0.85, 0.6), 0.2, 0.15),  // Dreapta Jos
+              _buildAnimatedHand('👋', const Alignment(-0.8, -0.7), 0.0, -0.2), 
+              _buildAnimatedHand('🤟', const Alignment(0.8, -0.6), 0.4, 0.2),  
+              _buildAnimatedHand('✋', const Alignment(-0.85, 0.7), 0.7, -0.1), 
+              _buildAnimatedHand('👏', const Alignment(0.85, 0.6), 0.2, 0.15),  
 
-              // --- FORMULARUL PRINCIPAL ---
               Center(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20),
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 450), // Cardul nu se mai întinde absurd pe PC!
+                    constraints: const BoxConstraints(maxWidth: 450), 
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         
-                        // LOGO ANIMAT (Pulsare & Glow)
                         _buildAnimatedLogo(),
                         const SizedBox(height: 35),
                         
-                        // CARDUL ALB (Design curat, umbre fine)
                         Container(
                           padding: const EdgeInsets.all(35),
                           decoration: BoxDecoration(
@@ -208,7 +200,6 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                 ),
                                 const SizedBox(height: 40),
                                 
-                                // CÂMP EMAIL
                                 const Text("  Adresă de email", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black54)),
                                 const SizedBox(height: 8),
                                 TextFormField(
@@ -230,7 +221,6 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                 ),
                                 const SizedBox(height: 25),
                                 
-                                // CÂMP PAROLĂ
                                 const Text("  Parolă", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black54)),
                                 const SizedBox(height: 8),
                                 TextFormField(
@@ -254,17 +244,17 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                   },
                                 ),
                                 
-                                // AI UITAT PAROLA?
                                 Align(
                                   alignment: Alignment.centerRight,
                                   child: TextButton(
-                                    onPressed: () {}, 
+                                    onPressed: () {
+                                      Navigator.push(context, MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()));
+                                    }, 
                                     child: const Text("Ai uitat parola?", style: TextStyle(color: Color(0xFF0083B0), fontWeight: FontWeight.bold, fontSize: 13)),
                                   ),
                                 ),
                                 const SizedBox(height: 15),
                                 
-                                // BUTON DE LOGIN CU GRADIENT TURCOAZ
                                 SizedBox(
                                   width: double.infinity,
                                   height: 60,
@@ -294,7 +284,6 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                         
                         const SizedBox(height: 35),
                         
-                        // LINK CĂTRE REGISTER
                         TextButton(
                           onPressed: () {
                             Navigator.push(context, MaterialPageRoute(builder: (context) => const RegisterScreen()));
@@ -321,14 +310,11 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     );
   }
 
-  // Helper: LOGO ANIMAT (Respiră și strălucește)
   Widget _buildAnimatedLogo() {
     return AnimatedBuilder(
       animation: _logoAnimController,
       builder: (context, child) {
-        // Valoare de la 1.0 la 1.05
         final scale = 1.0 + (_logoAnimController.value * 0.05);
-        // Glow care se modifică odată cu respirația
         final glowBlur = 10.0 + (_logoAnimController.value * 20.0);
         
         return Transform.scale(
@@ -353,24 +339,22 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     );
   }
 
-  // Helper: MÂINI ANIMATE (Plutesc fluid și se rotesc)
   Widget _buildAnimatedHand(String emoji, Alignment alignment, double delayOffset, double baseRotation) {
     return Align(
       alignment: alignment,
       child: AnimatedBuilder(
         animation: _handsAnimController,
         builder: (context, child) {
-          // Mișcare sinusoidală fluidă
           final double wave = math.sin((_handsAnimController.value * 2 * math.pi) + (delayOffset * math.pi * 2));
           
           return Transform.translate(
-            offset: Offset(0, wave * 25), // Se mișcă sus-jos 25 pixeli
+            offset: Offset(0, wave * 25), 
             child: Transform.rotate(
-              angle: baseRotation + (wave * 0.15), // Se și rotesc un pic
+              angle: baseRotation + (wave * 0.15), 
               child: Text(
                 emoji,
                 style: TextStyle(
-                  fontSize: 85, // Mult mai mari, vizibile și impunătoare
+                  fontSize: 85, 
                   shadows: [Shadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 15, offset: const Offset(0, 15))],
                 ),
               ),

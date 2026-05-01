@@ -13,19 +13,19 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final _supabase = Supabase.instance.client;
   
-  // Cheia globală pentru validarea formularului
+  
   final _formKey = GlobalKey<FormState>();
   
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isUploadingImage = false;
 
-  // Variabile pentru datele din baza de date
+
   String _rol = '';
   String _pozaProfilUrl = '';
   bool _vizibilHarta = true;
 
-  // Controllere pentru formular
+ 
   final _prenumeController = TextEditingController();
   final _numeController = TextEditingController();
   final _telefonController = TextEditingController();
@@ -46,7 +46,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
-  // --- 1. PRELUARE DATE DIN SUPABASE ---
+
   Future<void> _incarcaDateProfil() async {
     try {
       final user = _supabase.auth.currentUser;
@@ -79,9 +79,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // --- 2. SALVARE DATE NOI ÎN SUPABASE (CU VALIDĂRI) ---
+
   Future<void> _salveazaDate() async {
-    // Verificăm dacă toate câmpurile respectă regulile
+
     if (!_formKey.currentState!.validate()) {
       return; 
     }
@@ -100,7 +100,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'telefon': _telefonController.text.trim(),
         'adresa_completa': _adresaController.text.trim(),
         'vizibil_harta': _vizibilHarta,
-        if (!_vizibilHarta) 'is_online': false, // Dispare de pe hartă instant dacă e ghost
+        if (!_vizibilHarta) 'is_online': false, 
       }).eq('id', user.id);
 
       if (!mounted) return;
@@ -109,7 +109,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SnackBar(content: Text("✅ Profil actualizat cu succes!"), backgroundColor: Colors.green),
       );
       
-      // Trimitem noul nume înapoi către HomeScreen
+
       Navigator.pop(context, "$noulPrenume $noulNume");
       
     } catch (e) {
@@ -122,7 +122,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // --- 3. GHOST MODE (Actualizare Instantă în BD) ---
+
   Future<void> _schimbaGhostMode(bool value) async {
     setState(() => _vizibilHarta = value);
     try {
@@ -142,7 +142,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // --- 4. ÎNCĂRCARE POZĂ DE PROFIL (REPARAT CU CACHE BUSTER) ---
   Future<void> _schimbaPozaProfil() async {
     try {
       FilePickerResult? result = await FilePicker.pickFiles(
@@ -160,18 +159,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
       
       final fileName = '${user!.id}.$fileExtension';
 
-      // Urcăm poza (suprascriem vechea poză)
       await _supabase.storage.from('avatars').upload(
             fileName,
             file,
-            // Setăm cacheControl la 0 ca serverul să nu păstreze fantome
             fileOptions: const FileOptions(cacheControl: '0', upsert: true), 
           );
 
       final publicUrl = _supabase.storage.from('avatars').getPublicUrl(fileName);
       
-      // HACK-UL GENIAL: Adăugăm milisecundele la URL în baza de date!
-      // Asta schimbă textul link-ului, forțând HomeScreen-ul și Profilul să redeseneze poza imediat.
       final urlFinalCuTimestamp = "$publicUrl?v=${DateTime.now().millisecondsSinceEpoch}";
 
       await _supabase.from('profiluri').update({'poza_profil': urlFinalCuTimestamp}).eq('id', user.id);
@@ -214,7 +209,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               key: _formKey, 
               child: Column(
                 children: [
-                  // --- HEADER PROFIL (POZA) ---
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.only(bottom: 30, top: 20),
@@ -275,7 +269,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   const SizedBox(height: 20),
 
-                  // --- FORMULARUL DE SETĂRI ---
                   Padding(
                     padding: const EdgeInsets.all(20.0),
                     child: Column(
@@ -318,7 +311,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         
                         const SizedBox(height: 30),
                         
-                        // --- SETĂRI INTIMITATE (GHOST MODE) ---
                         const Text("Intimitate & Locație", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
                         const SizedBox(height: 15),
                         
@@ -350,7 +342,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                         const SizedBox(height: 40),
 
-                        // --- BUTON SALVARE ---
                         SizedBox(
                           width: double.infinity,
                           height: 55,

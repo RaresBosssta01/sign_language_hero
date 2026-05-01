@@ -3,9 +3,7 @@ import 'package:camera/camera.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
-
-// Importăm cheia secretă!
-import '../constants.dart'; 
+import '../constants.dart'; //Acesta e folderul cu cheia mea secreta de la gemini. Nu o sa incarc cheia pe github, dar AI-ul merge.
 
 class MirrorScreen extends StatefulWidget {
   final String numeSemn;
@@ -25,12 +23,12 @@ class _MirrorScreenState extends State<MirrorScreen> {
   late String _feedbackCurent;
   bool _showFlash = false;
   
-  // MEMORIA AI
+
   String _istoricAnterior = ""; 
   
-  // Pentru Supabase XP
+
   final _supabase = Supabase.instance.client;
-  bool _xpAcordat = false; // Ne asigurăm că dăm XP doar o dată per sesiune de exersare
+  bool _xpAcordat = false; 
 
   @override
   void initState() {
@@ -44,7 +42,6 @@ class _MirrorScreenState extends State<MirrorScreen> {
       final cameras = await availableCameras();
       if (cameras.isEmpty) return;
 
-      // Preferăm camera frontală pentru "Oglindă"
       CameraDescription? cameraAleasa;
       for (var camera in cameras) {
         if (camera.lensDirection == CameraLensDirection.front) {
@@ -52,7 +49,7 @@ class _MirrorScreenState extends State<MirrorScreen> {
           break;
         }
       }
-      cameraAleasa ??= cameras.first; // Fallback dacă nu are cameră frontală
+      cameraAleasa ??= cameras.first; 
 
       _cameraController = CameraController(cameraAleasa, ResolutionPreset.medium);
 
@@ -68,19 +65,18 @@ class _MirrorScreenState extends State<MirrorScreen> {
     }
   }
 
-  // Funcție pentru a acorda XP voluntarului
+
   Future<void> _acordaXP() async {
-    if (_xpAcordat) return; // Dacă a primit deja puncte pentru exercițiul ăsta, nu mai dăm
+    if (_xpAcordat) return; 
     
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) return;
 
-      // Preluăm XP-ul curent
+
       final response = await _supabase.from('profiluri').select('xp').eq('id', user.id).single();
       int xpCurent = response['xp'] ?? 0;
 
-      // Adăugăm 10 XP
       await _supabase.from('profiluri').update({'xp': xpCurent + 10}).eq('id', user.id);
       
       _xpAcordat = true;
@@ -119,7 +115,6 @@ class _MirrorScreenState extends State<MirrorScreen> {
         }
       });
     } else {
-      // Dacă e o reîncercare (Auto-Retry), nu mai punem timer
       await _efectueazaAnalizaAI(attempt: attempt);
     }
   }
@@ -140,7 +135,6 @@ class _MirrorScreenState extends State<MirrorScreen> {
       final image = await _cameraController!.takePicture();
       final imageBytes = await image.readAsBytes();
 
-      // Folosim cheia ta
       final model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: geminiApiKey); 
       
       final prompt = TextPart("""
@@ -164,7 +158,6 @@ class _MirrorScreenState extends State<MirrorScreen> {
       ]).timeout(const Duration(seconds: 15)); 
 
       if (mounted) {
-        // REZOLVAREA EROIRII: Declarăm variabila ÎNAINTE de setState
         String noulFeedback = response.text ?? "Oops! Nu am reușit să văd clar. Mai facem o poză? 📸";
         
         setState(() {
@@ -173,7 +166,7 @@ class _MirrorScreenState extends State<MirrorScreen> {
           _isAnalyzing = false;
         });
         
-        // Acum Dart știe ce este noulFeedback și nu mai dă eroare!
+
         if (!noulFeedback.contains("Oops") && !noulFeedback.contains("Nu am reușit")) {
            _acordaXP();
         }
@@ -181,7 +174,7 @@ class _MirrorScreenState extends State<MirrorScreen> {
     } on TimeoutException catch (_) {
       if (mounted) {
         if (attempt < 3) {
-          // AUTO-RETRY logic
+
           Future.delayed(const Duration(seconds: 2), () {
             _analizeazaSemnul(attempt: attempt + 1);
           });
@@ -194,7 +187,7 @@ class _MirrorScreenState extends State<MirrorScreen> {
       }
     } catch (e) {
       if (mounted) {
-        // Dacă e eroare 503 (Rate Limit) și nu am depășit 3 încercări, facem Auto-Retry
+
         if (e.toString().contains('503') && attempt < 3) {
            Future.delayed(const Duration(seconds: 3), () {
             _analizeazaSemnul(attempt: attempt + 1);
